@@ -1,28 +1,6 @@
 # Benchmarking Predict-then-Optimize (PtO) Problems
 
-## About
-
-This repository provides a comprehensive framework for benchmarking Predict-then-Optimize (PtO) problems using Decision-Focused Learning (DFL) approaches. PtO problems involve making predictions that are used as input to downstream optimization tasks, where traditional two-stage methods often lead to suboptimal solutions. DFL addresses this by training machine learning models that directly optimize for the downstream decision-making objectives.
-
-
-This repository contains the implementation for the paper (Accepted to Journal of Artificial Intelligence Research (JAIR)):
-
-> Mandi, J., Kotary, J., Berden, S., Mulamba, M., Bucarey, V., Guns, T., & Fioretto, F. (2024). Decision-focused learning: Foundations, state of the art, benchmark and future opportunities. Journal of Artificial Intelligence Research, 80, 1623-1701. [DOI: 10.1613/jair.1.15320](https://doi.org/10.1613/jair.1.15320)
-
-If you use this code in your research, please cite:
-```bibtex
-@article{mandi2024decision,
-  title={Decision-focused learning: Foundations, state of the art, benchmark and future opportunities},
-  author={Mandi, Jayanta and Kotary, James and Berden, Senne and Mulamba, Maxime and Bucarey, Victor and Guns, Tias and Fioretto, Ferdinando},
-  journal={Journal of Artificial Intelligence Research},
-  volume={80},
-  pages={1623--1701},
-  year={2024},
-  doi={10.1613/jair.1.15320}
-}
-```
-
-
+This repository's purpose is the reproducibility of the numerical experiments led in the article: "Managing Solution Stability in Decision-Focused Learning: On the Importance of Cost Vector Regularization". It consists mostly in an adaptation of the code proposed by Jayanta Mandi: https://github.com/PredOpt/predopt-benchmarks
 
 ## Installation
 
@@ -68,6 +46,3 @@ source activate benchmarking_env
 
 Navigate to the corresponding experiment directory to run specific benchmarks.
 
-## Contributing
-
-Feel free to open issues or submit pull requests if you find any problems or have suggestions for improvements.
