@@ -1,4 +1,4 @@
-# Benchmarking Predict-then-Optimize (PtO) Problems
+# Benchmarking Predict-then-Optimize Problems
 
 This repository's purpose is the reproducibility of the numerical experiments led in the article: "Managing Solution Stability in Decision-Focused Learning: On the Importance of Cost Vector Regularization". It consists mostly in an adaptation of the code proposed by Jayanta Mandi: https://github.com/PredOpt/predopt-benchmarks
 
