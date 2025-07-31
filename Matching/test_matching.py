@@ -57,6 +57,12 @@ from Trainer.bipartite import bmatching_diverse
 from distutils.util import strtobool
 import json
 
+from pytorch_lightning.callbacks.early_stopping import EarlyStopping
+from pytorch_lightning.callbacks import Callback
+import copy
+import matplotlib.pyplot as plt
+import time
+
 # Define diversity parameter sets for different instances
 params_dict = { 
     1: {'p': 0.1, 'q': 0.1}, 
@@ -97,7 +103,36 @@ parser.add_argument("--diffKKT",  action='store_true', help="Whether KKT or HSD 
 parser.add_argument("--tau", type=float, help="parameter of rankwise losses", default= 1e-8)
 parser.add_argument("--growth", type=float, help="growth parameter of rankwise losses", default= 0.05)
 
-parser.add_argument('--scheduler', dest='scheduler',  type=lambda x: bool(strtobool(x)))
+parser.add_argument('--scheduler', dest='scheduler',  type=lambda x: bool(strtobool(x)), default= False)
+
+class MetricTracker(Callback):
+
+  def __init__(self):
+    self.collection = []
+    self.collection_test = []
+
+  def on_validation_batch_end(self, trainer, module, outputs, batch, batch_idx, idk):
+    # vacc = outputs['val_acc'] # you can access them here
+    # self.collection.append(vacc) # track them
+    return
+
+  def on_validation_epoch_end(self, trainer, module):
+    elogs = trainer.logged_metrics # access it here
+    self.collection.append(copy.deepcopy(elogs))
+    # do whatever is needed
+    return 
+    
+  def on_test_batch_end(self, trainer, module, outputs, batch, batch_idx, idk):
+    # vacc = outputs['val_acc'] # you can access them here
+    # self.collection.append(vacc) # track them
+    return
+
+    
+  def on_test_epoch_end(self, trainer, module):
+    elogs = trainer.logged_metrics # access it here
+    self.collection_test.append(copy.deepcopy(elogs))
+    # do whatever is needed
+    return 
 
 class _Sentinel:
     pass
@@ -110,126 +145,146 @@ def seed_all(seed):
     torch.cuda.manual_seed(seed)
     np.random.seed(seed)
     random.seed(seed)
-# Load parameter sets from JSON file
-with open('config.json', "r") as json_file:
-    parameter_sets = json.load(json_file)
-
-for parameters in parameter_sets:
     
-    Args = argparse.Namespace(**parameters)
-    args = parser.parse_args(namespace=Args)
-    argument_dict = vars(args)
-    # print(argument_dict)
-    
-    sentinel = _Sentinel()
-    
-    explicit_keys = {key: sentinel if key not in parameters else parameters[key] for key in argument_dict}
-    sentinel_ns = Namespace(**explicit_keys)
-    parser.parse_args(namespace=sentinel_ns)
-    explicit = {key:value for key, value in vars(sentinel_ns).items() if value is not sentinel }
-    print ("EXPLICIT",  explicit)
+def exec():
 
-    get_class = lambda x: globals()[x]
-    modelcls = get_class(argument_dict['model'])
-    modelname = argument_dict.pop('model')
-
-    ######## Solver for this instance
-    params = params_dict[ argument_dict['instance']]
-    solver = bmatching_diverse(**params)
-    if modelname=="CachingPO":
-        cache = return_trainlabel( solver,params )
-    # ###################################### Hyperparams #########################################
-
-    torch.use_deterministic_algorithms(True)
-
-
-    # ################## Define the outputfile
-    outputfile = "Rslt/{}matching{}{}.csv".format(modelname, args.loss,  args.instance)
-    regretfile = "Rslt/{}matchingRegret{}{}.csv".format(modelname,   args.loss,args.instance)
-    ckpt_dir =  "ckpt_dir/{}{}{}/".format(modelname,  args.loss,args.instance)
-    log_dir = "lightning_logs/{}{}{}/".format(modelname,  args.loss,args.instance)
-
-    learning_curve_datafile = "LearningCurve/{}_".format(modelname)+"_".join( ["{}_{}".format(k,v) for k,v  in explicit.items()] )+".csv"  
-
-    shutil.rmtree(log_dir,ignore_errors=True)
-
-    for seed in range(10):
-        shutil.rmtree(ckpt_dir,ignore_errors=True)
-        checkpoint_callback = ModelCheckpoint(
-                        # monitor="val_regret",mode="min",
-                        dirpath=ckpt_dir, 
-                        filename="model-{epoch:02d}-{val_regret:.8f}",
-                        
-                    )
-        seed_all(seed)
-
-        g = torch.Generator()
-        g.manual_seed(seed)
-
-        data =  CoraMatchingDataModule(solver,params= params, 
-        batch_size= argument_dict['batch_size'], generator=g, num_workers=4)
-        tb_logger = pl_loggers.TensorBoardLogger(save_dir= log_dir, version=seed)
-        if modelname=="CachingPO":
-            model = modelcls(init_cache=cache, solver=solver,seed=seed, **argument_dict)
-        else:
-            model = modelcls(solver=solver,seed=seed, **argument_dict)
-
-        trainer = pl.Trainer(max_epochs=  argument_dict['max_epochs'], min_epochs=3, 
-        logger=tb_logger, callbacks=[checkpoint_callback])
-        trainer.fit(model, datamodule=data)
-
-        best_model_path = checkpoint_callback.best_model_path
-        # print("Model Path:",best_model_path)
-        if modelname=="CachingPO":
-            model = modelcls.load_from_checkpoint(best_model_path ,  init_cache=cache, solver=solver,seed=seed,
-        **argument_dict)
-        else:
-            model = modelcls.load_from_checkpoint(best_model_path ,solver=solver,seed=seed,
-        **argument_dict)    
-
-        regret_list = trainer.predict(model, data.test_dataloader())
+    with open('config_DPO_tmp.json', "r") as json_file:
+        parameter_sets = json.load(json_file)
         
+    cpt=0
+    figurefile = "C:/Users/Victor/Pictures/ADPO/matching/"
+    for parameters in parameter_sets:
+        
+        Args = argparse.Namespace(**parameters)
+        args = parser.parse_args(namespace=Args)
+        argument_dict = vars(args)
+        # print(argument_dict)
+        
+        sentinel = _Sentinel()
+        
+        explicit_keys = {key: sentinel if key not in parameters else parameters[key] for key in argument_dict}
+        sentinel_ns = Namespace(**explicit_keys)
+        parser.parse_args(namespace=sentinel_ns)
+        explicit = {key:value for key, value in vars(sentinel_ns).items() if value is not sentinel }
+        print ("EXPLICIT",  explicit)
 
-        df = pd.DataFrame({"regret":regret_list[0].tolist()})
-        df.index.name='instance'
-        for k,v in explicit.items():
-            df[k] = v
-        df['seed']= seed
-    
-        with open(regretfile, 'a') as f:
-            df.to_csv(f, header=f.tell()==0)
+        get_class = lambda x: globals()[x]
+        modelcls = get_class(argument_dict['model'])
+        modelname = argument_dict.pop('model')
+
+        ######## Solver for this instance
+        params = params_dict[ argument_dict['instance']]
+        solver = bmatching_diverse(**params)
+        if modelname=="CachingPO":
+            cache = return_trainlabel( solver,params )
+        # ###################################### Hyperparams #########################################
+
+        torch.use_deterministic_algorithms(True)
 
 
-        testresult = trainer.test(model, datamodule=data)
-        df = pd.DataFrame(testresult )
-        for k,v in explicit.items():
-            df[k] = v
-        df['seed']= seed
+        # ################## Define the outputfile
+        outputfile = "Rslt/{}matching{}{}.csv".format(modelname, args.loss,  args.instance)
+        regretfile = "Rslt/{}matchingRegret{}{}.csv".format(modelname,   args.loss,args.instance)
+        ckpt_dir =  "ckpt_dir/{}{}{}/".format(modelname,  args.loss,args.instance)
+        log_dir = "lightning_logs/{}{}{}/".format(modelname,  args.loss,args.instance)
 
-        with open(outputfile, 'a') as f:
-                df.to_csv(f, header=f.tell()==0)
-    ###############################  Save  Learning Curve Data ########
-    import os
-    from tensorboard.backend.event_processing.event_accumulator import EventAccumulator
-    parent_dir=   log_dir+"lightning_logs/"
-    version_dirs = [os.path.join(parent_dir,v) for v in os.listdir(parent_dir)]
+        learning_curve_datafile = "LearningCurve/{}_".format(modelname)+"_".join( ["{}_{}".format(k,v) for k,v  in explicit.items()] )+".csv"  
 
-    walltimes = []
-    steps = []
-    regrets= []
-    mses = []
-    for logs in version_dirs:
-        event_accumulator = EventAccumulator(logs)
-        event_accumulator.Reload()
+        shutil.rmtree(log_dir,ignore_errors=True)
 
-        events = event_accumulator.Scalars("val_regret")
-        walltimes.extend( [x.wall_time for x in events])
-        steps.extend([x.step for x in events])
-        regrets.extend([x.value for x in events])
-        events = event_accumulator.Scalars("val_mse")
-        mses.extend([x.value for x in events])
+        for seed in range(10):
 
-    df = pd.DataFrame({"step": steps,'wall_time':walltimes,  "val_regret": regrets,
-    "val_mse": mses })
-    df['model'] = modelname
-    df.to_csv(learning_curve_datafile)
+            # Train baseline mse
+            torch.use_deterministic_algorithms(True)
+
+            g = torch.Generator()
+            g.manual_seed(seed)
+        
+            shutil.rmtree(ckpt_dir,ignore_errors=True)
+            checkpoint_callback = ModelCheckpoint(
+                            # monitor="val_regret",mode="min",
+                            dirpath=ckpt_dir, 
+                            filename="model-{epoch:02d}-{val_regret:.8f}",
+                            
+                        )
+            seed_all(seed)
+
+            data =  CoraMatchingDataModule(solver,params= params, 
+            batch_size= argument_dict['batch_size'], generator=g, num_workers=0)
+            tb_logger = pl_loggers.TensorBoardLogger(save_dir= log_dir, version=seed)
+            callback_list = []
+            cb = MetricTracker()
+            callback_list.append(cb)
+            callback_list.append(checkpoint_callback)
+            # cb_stop = EarlyStopping(monitor="val_regret", mode="min", patience=1, min_delta=0.005)
+            # callback_list.append(cb_stop)
+            if modelname=="CachingPO":
+                model = modelcls(init_cache=cache, solver=solver,seed=seed, **argument_dict)
+            else:
+                model = modelcls(solver=solver,seed=seed, **argument_dict)
+
+            trainer = pl.Trainer(max_epochs=  argument_dict['max_epochs'], min_epochs=3, 
+            logger=tb_logger, callbacks=callback_list, check_val_every_n_epoch=10)
+
+            t_start = time.process_time()
+            trainer.fit(model, datamodule=data)
+            training_time = time.process_time() - t_start
+
+            # torch.save(model.state_dict(), "PF_model/model_"+str(argument_dict['instance'])+"_"+str(seed)+".pt")
+
+            best_model_path = checkpoint_callback.best_model_path
+            # print("Model Path:",best_model_path)
+            if modelname=="CachingPO":
+                model = modelcls.load_from_checkpoint(best_model_path ,  init_cache=cache, solver=solver,seed=seed,
+            **argument_dict)
+            else:
+                model = modelcls.load_from_checkpoint(best_model_path ,solver=solver,seed=seed,
+            **argument_dict)    
+
+            regret_list = trainer.predict(model, data.test_dataloader())
+            
+            validresult = trainer.validate(model,datamodule=data)
+            testresult = trainer.test(model, datamodule=data)
+            df = pd.DataFrame({**testresult[0], **validresult[0]},index=[0])
+            for k,v in explicit.items():
+                df[k] = v
+            df['seed'] = seed
+            df['time'] =training_time
+            with open(outputfile, 'a') as f:
+                    df.to_csv(f, header=f.tell()==0)
+                    
+            clct = cb.collection
+
+                
+
+
+                    
+        ###############################  Save  Learning Curve Data ########
+        import os
+        from tensorboard.backend.event_processing.event_accumulator import EventAccumulator
+        parent_dir=   log_dir+"lightning_logs/"
+        version_dirs = [os.path.join(parent_dir,v) for v in os.listdir(parent_dir)]
+
+        walltimes = []
+        steps = []
+        regrets= []
+        mses = []
+        for logs in version_dirs:
+            event_accumulator = EventAccumulator(logs)
+            event_accumulator.Reload()
+
+            events = event_accumulator.Scalars("val_regret")
+            walltimes.extend( [x.wall_time for x in events])
+            steps.extend([x.step for x in events])
+            regrets.extend([x.value for x in events])
+            events = event_accumulator.Scalars("val_mse")
+            mses.extend([x.value for x in events])
+
+        # df = pd.DataFrame({"step": steps,'wall_time':walltimes,  "val_regret": regrets,
+        # "val_mse": mses })
+        # df['model'] = modelname
+        # df.to_csv(learning_curve_datafile)
+
+
+if __name__ == '__main__':
+    exec()

@@ -64,29 +64,28 @@ class cvx_knapsack_solver(nn.Module):
 
 
 
-from intopt.intopt import intopt
-class intopt_knapsack_solver(nn.Module):
-    def __init__(self, weights,capacity,n_items, thr=0.1,damping=1e-3, diffKKT = False, dopresolve = True,):
-        super().__init__()
-        self.weights=  weights
-        self.capacity = capacity
-        self.n_items = n_items  
-        A = weights.reshape(1,-1).astype(np.float32)
-        b = np.array([capacity]).astype(np.float32)
-        A_lb  = -np.eye(n_items).astype(np.float32)
-        b_lb = np.zeros(n_items).astype(np.float32)
-        A_ub  = np.eye(n_items).astype(np.float32)
-        b_ub = np.ones(n_items).astype(np.float32)
+# from intopt.intopt import intopt
+# class intopt_knapsack_solver(nn.Module):
+    # def __init__(self, weights,capacity,n_items, thr=0.1,damping=1e-3, diffKKT = False, dopresolve = True,):
+        # super().__init__()
+        # self.weights=  weights
+        # self.capacity = capacity
+        # self.n_items = n_items  
+        # A = weights.reshape(1,-1).astype(np.float32)
+        # b = np.array([capacity]).astype(np.float32)
+        # A_lb  = -np.eye(n_items).astype(np.float32)
+        # b_lb = np.zeros(n_items).astype(np.float32)
+        # A_ub  = np.eye(n_items).astype(np.float32)
+        # b_ub = np.ones(n_items).astype(np.float32)
 
-        # G = np.concatenate((A_lb, A_ub   ), axis=0).astype(np.float32)
-        # h = np.concatenate(( b_lb, b_ub )).astype(np.float32)
-        self.A, self.b,self.G, self.h =  torch.from_numpy(A), torch.from_numpy(b),  torch.from_numpy(A_ub),  torch.from_numpy(b_ub)
-        self.thr =thr
-        self.damping = damping
-        self.layer = intopt(self.A, self.b,self.G, self.h, thr, damping, diffKKT, dopresolve)
 
-    def forward(self,costs):
-        return self.layer(-costs)
+        # self.A, self.b,self.G, self.h =  torch.from_numpy(A), torch.from_numpy(b),  torch.from_numpy(A_ub),  torch.from_numpy(b_ub)
+        # self.thr =thr
+        # self.damping = damping
+        # self.layer = intopt(self.A, self.b,self.G, self.h, thr, damping, diffKKT, dopresolve)
+
+    # def forward(self,costs):
+        # return self.layer(-costs)
 
         # sol = [self.layer(-cost) for cost in costs]
 

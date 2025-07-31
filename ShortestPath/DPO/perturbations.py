@@ -200,7 +200,8 @@ def perturbed(func=None,
                 noise_grad = flatten(noise_grad)  # (N, B, D)
 
                 g = torch.einsum('nbd,nb->bd', noise_grad, torch.einsum('nbd,bd->nb', output, dy))
-                g /= sigma * num_samples
+                g /= num_samples
+                # g /= sigma * num_samples
                 return torch.reshape(g, original_input_shape)
 
         return PerturbedFunc.apply(input_tensor, *args)

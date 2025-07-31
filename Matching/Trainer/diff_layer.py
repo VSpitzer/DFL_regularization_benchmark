@@ -5,7 +5,7 @@ from Trainer.utils import batch_solve
 
 
 
-def SPOlayer(solver,minimize=False):
+def SPOlayer(solver, alpha=2, minimize=False):
     mm = 1 if minimize else -1
     class SPOlayer_cls(torch.autograd.Function):
         @staticmethod
@@ -19,7 +19,7 @@ def SPOlayer(solver,minimize=False):
         @staticmethod
         def backward(ctx, grad_output):
             y_hat,y_true,sol_true ,m = ctx.saved_tensors
-            y_spo = 2*y_hat - y_true
+            y_spo = alpha*y_hat - y_true
             sol_spo = batch_solve(solver,y_spo ,m)
             return (sol_true - sol_spo)*mm, None, None, None
     return SPOlayer_cls.apply

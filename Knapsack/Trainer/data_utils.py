@@ -52,6 +52,7 @@ class KnapsackDataModule(pl.LightningDataModule):
         x_valid, y_valid = x[550:650], y[550:650]
         x_test, y_test = x[650:], y[650:]
 
+
         solver = knapsack_solver(weights,capacity= capacity, n_items= len(weights) )
 
         self.train_df = Datawrapper( x_train,y_train,solver=solver)

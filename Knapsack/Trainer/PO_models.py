@@ -7,9 +7,10 @@ from torch.utils.data import DataLoader
 from torch.autograd import Variable
 import torch.nn.functional as F
 import pytorch_lightning as pl
-from Trainer.comb_solver import knapsack_solver, cvx_knapsack_solver,  intopt_knapsack_solver
+# from Trainer.comb_solver import knapsack_solver, cvx_knapsack_solver,  intopt_knapsack_solver
+from Trainer.comb_solver import knapsack_solver, cvx_knapsack_solver
 from Trainer.utils import batch_solve, regret_fn, abs_regret_fn, regret_list,  growpool_fn
-from Trainer.diff_layer import SPOlayer, DBBlayer
+from Trainer.diff_layer import SPOlayer, SPOnormLayer, DBBlayer
 
 from DPO import perturbations
 from DPO import fenchel_young as fy
@@ -18,18 +19,6 @@ from imle.target import TargetDistribution
 from imle.noise import SumOfGammaNoiseDistribution
 
 class baseline_mse(pl.LightningModule):
-    """
-    Two-Stage Model for Predicting Values of Knapsack Problems
-
-    Args:
-        weights (np.ndarray): Array of item weights
-        capacity (float): Knapsack capacity
-        n_items (int): Number of items
-        lr (float, optional): Learning rate. Defaults to 1e-1.
-        seed (int, optional): Random seed for reproducibility. Defaults to 0.
-        scheduler (bool, optional): Whether to use learning rate scheduler. Defaults to False.
-        **kwd: Additional keyword arguments
-    """
     def __init__(self,weights,capacity,n_items,lr=1e-1,seed=0,scheduler=False, **kwd):
         super().__init__()
         pl.seed_everything(seed)
@@ -101,22 +90,41 @@ class baseline_mse(pl.LightningModule):
         return optimizer
 
 
-class SPO(baseline_mse):
-    """
-    Smart Predict-then-Optimize (SPO+) Implementation for Predicting Values of Knapsack Problems
+class ADPO_norm(baseline_mse):
+    def __init__(self,weights,capacity,n_items, sigma_max=1., sigma_min=0.001, num_samples=10, alpha=1., N_periods=1, len_periods=1, lr=1e-1,seed=0,scheduler=False, **kwd):
+        super().__init__(weights,capacity,n_items,lr,seed, scheduler)  
+        self.num_samples = num_samples
+        
+        self.sigma_tab = np.zeros(N_periods*len_periods)
+        for i in range(N_periods):
+            self.sigma_tab[i*len_periods:(i+1)*len_periods] = np.array([sigma_min + (sigma_max-sigma_min)*(1-j*1./len_periods) for j in range(len_periods)])
+        
+        # self.sigma_tab = np.concatenate((np.linspace(1,5,20),np.ones(10)*5))
+        # self.sigma_tab = np.ones(30)
 
-    Args:
-        weights (np.ndarray): Array of item weights
-        capacity (float): Knapsack capacity
-        n_items (int): Number of items
-        lr (float, optional): Learning rate. Defaults to 1e-1.
-        seed (int, optional): Random seed for reproducibility. Defaults to 0.
-        scheduler (bool, optional): Whether to use learning rate scheduler. Defaults to False.
-        **kwd: Additional keyword arguments
-    """
-    def __init__(self,weights,capacity,n_items,lr=1e-1,seed=0,scheduler=False, **kwd):
+    def training_step(self, batch, batch_idx):
+        x,y,sol = batch
+        y_hat =  self(x).squeeze()
+           
+        @perturbations.perturbed(num_samples= self.num_samples, sigma= self.sigma_tab[self.current_epoch], noise='normal',batched = True)
+        def dpo_layer(y):
+            return  batch_solve(self.solver,y)
+        self.layer = dpo_layer
+           
+        normalized_y_hat = torch.zeros(y_hat.shape)
+        for i in range(len(y_hat)):
+            # normalized_y_hat[i] = y_hat[i]*1./torch.sqrt(torch.var(y_hat[i]))
+            normalized_y_hat[i] = y_hat[i]*1./torch.linalg.norm(y_hat[i])
+        sol_hat = self.layer(normalized_y_hat) 
+
+        loss = ((sol - sol_hat)*y).sum(-1).mean()  ## to minimize regret,
+        self.log("train_loss", loss, prog_bar=True, on_step=True, on_epoch=True, )
+        return loss
+
+class SPO(baseline_mse):
+    def __init__(self,weights,capacity,n_items,lr=1e-1,alpha=2,seed=0,scheduler=False, **kwd):
         super().__init__(weights,capacity,n_items,lr,seed, scheduler)
-        self.layer = SPOlayer(self.solver)
+        self.layer = SPOlayer(self.solver, alpha=alpha)
     
 
     def training_step(self, batch, batch_idx):
@@ -126,26 +134,54 @@ class SPO(baseline_mse):
         loss =  self.layer(y_hat, y,sol ) 
         self.log("train_loss",loss, prog_bar=True, on_step=True, on_epoch=True, )
         return loss
+        
+class SPO_norm(baseline_mse):
+    def __init__(self,weights,capacity,n_items,lr=1e-1,alpha=2,seed=0,scheduler=False, **kwd):
+        super().__init__(weights,capacity,n_items,lr,seed, scheduler)
+        self.layer = SPOnormLayer(self.solver, alpha=alpha)
+    
 
-class DBB(baseline_mse):
-    """
-    Implementation of Differentiable Black-Box Optimization
+    def training_step(self, batch, batch_idx):
+        x,y,sol = batch
+        
+        y_hat =  self(x).squeeze()
+        
+        normalized_y_hat = torch.zeros(y_hat.shape)
+        for i in range(len(y_hat)):
+            normalized_y_hat[i] = y_hat[i]*1./torch.sqrt(torch.var(y_hat[i]))
+        
+        normalized_y = torch.zeros(y.shape)
+        for i in range(len(y)):
+            normalized_y[i] = y[i]*1./torch.sqrt(torch.var(y[i]))        
+        
+        loss =  self.layer(normalized_y_hat, normalized_y,sol ) 
+        self.log("train_loss",loss, prog_bar=True, on_step=True, on_epoch=True, )
+        return loss
+        
+class SPO_norm_2(baseline_mse):
+    def __init__(self,weights,capacity,n_items,lr=1e-1,alpha=2,seed=0,scheduler=False, **kwd):
+        super().__init__(weights,capacity,n_items,lr,seed, scheduler)
+        self.layer = SPOnormLayer(self.solver, alpha=alpha)
+    
 
+    def training_step(self, batch, batch_idx):
+        x,y,sol = batch
+        
+        y_hat =  self(x).squeeze()
+        
+        normalized_y_hat = torch.zeros(y_hat.shape)
+        for i in range(len(y_hat)):
+            normalized_y_hat[i] = y_hat[i]*1./torch.linalg.norm(y_hat[i])
+        
+        normalized_y = torch.zeros(y.shape)
+        for i in range(len(y)):
+            normalized_y[i] = y[i]*1./torch.linalg.norm(y[i])       
+        
+        loss =  self.layer(normalized_y_hat, normalized_y,sol ) 
+        self.log("train_loss",loss, prog_bar=True, on_step=True, on_epoch=True, )
+        return loss
 
-    A decision-focused learning approach that enables end-to-end training through black-box optimization solvers.
-    This method computes gradients directly through the optimization problem without requiring
-    explicit knowledge of the solver's internal structure.
-
-    Args:
-        weights (np.ndarray): Array of item weights
-        capacity (float): Knapsack capacity
-        n_items (int): Number of items
-        lambda_val (float, optional): Regularization parameter. Defaults to 1.
-        lr (float, optional): Learning rate. Defaults to 1e-1.
-        seed (int, optional): Random seed for reproducibility. Defaults to 0.
-        scheduler (bool, optional): Whether to use learning rate scheduler. Defaults to False.
-        **kwd: Additional keyword arguments
-    """
+class DBB_norm(baseline_mse):
     def __init__(self,weights,capacity,n_items,lambda_val=1., lr=1e-1,seed=0,scheduler=False, **kwd):
         super().__init__(weights,capacity,n_items,lr,seed, scheduler)
         self.layer = DBBlayer(self.solver, lambda_val=lambda_val)
@@ -155,39 +191,125 @@ class DBB(baseline_mse):
         x,y,sol = batch
         
         y_hat =  self(x).squeeze()
-        sol_hat = self.layer(y_hat, y,sol ) 
-        loss = ((sol - sol_hat)*y).sum(-1).mean()
+
+        normalized_y_hat = torch.zeros(y_hat.shape)
+        for i in range(len(y_hat)):
+            normalized_y_hat[i] = y_hat[i]*1./torch.sqrt(torch.var(y_hat[i]))     
+
+        normalized_y = torch.zeros(y.shape)
+        for i in range(len(y_hat)):
+            normalized_y[i] = y[i]*1./torch.sqrt(torch.var(y[i]))
+        
+        sol_hat = self.layer(normalized_y_hat, normalized_y,sol ) 
+        
+        loss = ((sol - sol_hat)*normalized_y).sum(-1).mean()
+        self.log("train_loss",loss, prog_bar=True, on_step=True, on_epoch=True, )
+        return loss
+        
+class DBB_norm_2(baseline_mse):
+    def __init__(self,weights,capacity,n_items,lambda_val=1., lr=1e-1,seed=0,scheduler=False, **kwd):
+        super().__init__(weights,capacity,n_items,lr,seed, scheduler)
+        self.layer = DBBlayer(self.solver, lambda_val=lambda_val)
+    
+
+    def training_step(self, batch, batch_idx):
+        x,y,sol = batch
+        
+        y_hat =  self(x).squeeze()
+
+        normalized_y_hat = torch.zeros(y_hat.shape)
+        for i in range(len(y_hat)):
+            normalized_y_hat[i] = y_hat[i]*1./torch.linalg.norm(y_hat[i])       
+        
+        normalized_y = torch.zeros(y.shape)
+        for i in range(len(y_hat)):
+            normalized_y[i] = y[i]*1./torch.linalg.norm(y[i])  
+        
+        sol_hat = self.layer(normalized_y_hat, normalized_y,sol ) 
+        
+        loss = ((sol - sol_hat)*normalized_y).sum(-1).mean()
         self.log("train_loss",loss, prog_bar=True, on_step=True, on_epoch=True, )
         return loss
 
 class FenchelYoung(baseline_mse):
-    """
-    Implementation of Fenchel-Young loss  using perturbation techniques
-    (Ref: https://github.com/tuero/perturbations-differential-pytorch)\
-
-    Args:
-        weights (np.ndarray): Array of item weights 
-        capacity (float): Knapsack capacity
-        n_items (int): Number of items
-        sigma (float, optional): Standard deviation of perturbation. Defaults to 0.1.
-        num_samples (int, optional): Number of samples for perturbation. Defaults to 10.
-        lr (float, optional): Learning rate. Defaults to 1e-1.
-        seed (int, optional): Random seed for reproducibility. Defaults to 0.
-        scheduler (bool, optional): Whether to use learning rate scheduler. Defaults to False.
-        **kwd: Additional keyword arguments
-    """
     def __init__(self,weights,capacity,n_items,sigma=0.1,num_samples=10, lr=1e-1,seed=0,scheduler=False, **kwd):
         super().__init__(weights,capacity,n_items,lr,seed, scheduler)  
 
         fy_solver =  lambda y_: batch_solve(self.solver,y_) 
         self.criterion = fy.FenchelYoungLoss(fy_solver, num_samples= num_samples, 
-        sigma= sigma,maximize = True, batched= True)
+        sigma= sigma, noise='normal', maximize = True, batched= True)
+        self.sigma = sigma
+        
     def training_step(self, batch, batch_idx):
         criterion = self.criterion 
         x,y,sol = batch
         y_hat =  self(x).squeeze()
-        loss = criterion(y_hat,sol).mean()
+        
+        normalized_y_hat = torch.zeros(y_hat.shape)
+        for i in range(len(y_hat)):
+            normalized_y_hat[i] = y_hat[i]*1./torch.sqrt(torch.var(y_hat[i])) 
+        
+        var = torch.mean(torch.sqrt(torch.var(y_hat, dim=1)))
+        
+        loss = criterion(normalized_y_hat,sol).mean()
         self.log("train_loss",loss, prog_bar=True, on_step=True, on_epoch=True, )
+        self.log("avg_var",var, prog_bar=True, on_step=True, on_epoch=True, )
+        return loss
+
+class DPO_norm(baseline_mse):
+    def __init__(self,weights,capacity,n_items,sigma=0.1,num_samples=10, lr=1e-1,seed=0,scheduler=False, **kwd):
+        super().__init__(weights,capacity,n_items,lr,seed, scheduler)  
+        self.sigma = sigma
+        self.num_samples = num_samples
+        
+        @perturbations.perturbed(num_samples= num_samples, sigma= sigma, noise='normal',batched = True)
+        def dpo_layer(y):
+            return  batch_solve(self.solver,y)
+        self.layer = dpo_layer
+        
+    def training_step(self, batch, batch_idx):
+        x,y,sol = batch
+        y_hat =  self(x).squeeze()
+
+        var = 0
+        normalized_y_hat = torch.zeros(y_hat.shape)
+        for i in range(len(y_hat)):
+            normalized_y_hat[i] = y_hat[i]*1./torch.sqrt(torch.var(y_hat[i]))
+            var += torch.sqrt(torch.var(y_hat[i]))
+        var *= 1./len(y_hat)
+        sol_hat = self.layer(normalized_y_hat) 
+
+        loss = ((sol - sol_hat)*y).sum(-1).mean()  ## to minimize regret
+        self.log("train_loss",loss, prog_bar=True, on_step=True, on_epoch=True, )
+        self.log("avg_var",var, prog_bar=True, on_step=True, on_epoch=True, )
+        return loss
+        
+class DPO_norm_2(baseline_mse):
+    def __init__(self,weights,capacity,n_items,sigma=0.1,num_samples=10, lr=1e-1,seed=0,scheduler=False, **kwd):
+        super().__init__(weights,capacity,n_items,lr,seed, scheduler)  
+        self.sigma = sigma
+        self.num_samples = num_samples
+        
+        @perturbations.perturbed(num_samples= num_samples, sigma= sigma, noise='normal',batched = True)
+        def dpo_layer(y):
+            return  batch_solve(self.solver,y)
+        self.layer = dpo_layer
+        
+    def training_step(self, batch, batch_idx):
+        x,y,sol = batch
+        y_hat =  self(x).squeeze()
+
+        var = 0
+        normalized_y_hat = torch.zeros(y_hat.shape)
+        for i in range(len(y_hat)):
+            normalized_y_hat[i] = y_hat[i]*1./torch.linalg.norm(y_hat[i])
+            var += torch.sqrt(torch.var(y_hat[i]))
+        var *= 1./len(y_hat)
+        sol_hat = self.layer(normalized_y_hat) 
+
+        loss = ((sol - sol_hat)*y).sum(-1).mean()  ## to minimize regret
+        self.log("train_loss",loss, prog_bar=True, on_step=True, on_epoch=True, )
+        self.log("avg_var",var, prog_bar=True, on_step=True, on_epoch=True, )
         return loss
 
 class DPO(baseline_mse):
@@ -198,7 +320,7 @@ class DPO(baseline_mse):
         self.criterion = fy.FenchelYoungLoss(fy_solver, num_samples= num_samples, 
         sigma= sigma,maximize = True, batched= True)
 
-        @perturbations.perturbed(num_samples= num_samples, sigma= sigma, noise='gumbel',batched = True)
+        @perturbations.perturbed(num_samples= num_samples, sigma= sigma, noise='normal',batched = True)
         def dpo_layer(y):
             return  batch_solve(self.solver,y)
         self.layer = dpo_layer
@@ -206,32 +328,20 @@ class DPO(baseline_mse):
     def training_step(self, batch, batch_idx):
         x,y,sol = batch
         y_hat =  self(x).squeeze()
+        
+        var = 0
+        for i in range(len(y_hat)):
+            var += torch.sqrt(torch.var(y_hat[i]))
+        var *= 1./len(y_hat)
+        
         sol_hat = self.layer(y_hat ) 
-        loss = ((sol - sol_hat)*y).sum(-1).mean()  ## to minimze regret
+        loss = ((sol - sol_hat)*y).sum(-1).mean()  ## to minimize regret
         self.log("train_loss",loss, prog_bar=True, on_step=True, on_epoch=True, )
+        self.log("avg_var",var, prog_bar=True, on_step=True, on_epoch=True, )
         return loss
 
 class IMLE(baseline_mse):
-    """
-    Implementation of
-    Implicit MLE (I-MLE): Backpropagating Through Discrete Exponential Family Distributions 
-    (Ref: https://github.com/uclnlp/torch-imle/blob/main/annotation-cli.py)
-    Args:
-        weights (np.ndarray): Array of item weights
-        capacity (float): Knapsack capacity
-        n_items (int): Number of items
-        k: the number of iterations
-        nb_iterations: the number of iterations
-        nb_samples: the number of samples
-        beta: the beta parameter for the solver
-        temperature: the temperature for the solver
-        lr: learning rate
-        l1_weight: the lasso regularization weight
-        max_epoch: maximum number of epcohs
-        seed: seed for reproducibility 
-        scheduler: the scheduler for learning rate
-    """
-    def __init__(self,weights,capacity,n_items, k=5, nb_iterations=100,nb_samples=1, beta=10.0,
+    def __init__(self,weights,capacity,n_items, k=5, nb_iterations=100,nb_samples=5, beta=10.0,
             temperature=1.0,   lr=1e-1,seed=0,scheduler=False, **kwd):
         super().__init__(weights,capacity,n_items,lr,seed, scheduler)
         imle_solver = lambda y_: batch_solve(self.solver,y_)
@@ -249,6 +359,65 @@ class IMLE(baseline_mse):
         loss = ((sol - sol_hat)*y).sum(-1).mean()  ## to minimze regret
         self.log("train_loss",loss, prog_bar=True, on_step=True, on_epoch=True, )
         return loss
+        
+class IMLE_norm(baseline_mse):
+    def __init__(self,weights,capacity,n_items, k=5, nb_iterations=100,nb_samples=5, beta=10.0,
+            temperature=1.0,   lr=1e-1,seed=0,scheduler=False, **kwd):
+        super().__init__(weights,capacity,n_items,lr,seed, scheduler)
+        imle_solver = lambda y_: batch_solve(self.solver,y_)
+
+        target_distribution = TargetDistribution(alpha=1.0, beta=beta)
+        noise_distribution = SumOfGammaNoiseDistribution(k= k, nb_iterations= nb_iterations)
+
+        self.layer = imle(imle_solver,  target_distribution=target_distribution,noise_distribution=noise_distribution,
+                    input_noise_temperature= temperature, target_noise_temperature= temperature,
+                    nb_samples= nb_samples)
+    def training_step(self, batch, batch_idx):
+        x,y,sol = batch
+        y_hat =  self(x).squeeze()
+        
+        normalized_y_hat = torch.zeros(y_hat.shape)
+        for i in range(len(y_hat)):
+            normalized_y_hat[i] = y_hat[i]*1./torch.sqrt(torch.var(y_hat[i]))
+        sol_hat = self.layer(normalized_y_hat) 
+        
+        normalized_y = torch.zeros(y.shape)
+        for i in range(len(y_hat)):
+            normalized_y[i] = y[i]*1./torch.sqrt(torch.var(y[i]))
+        
+        loss = ((sol - sol_hat)*normalized_y).sum(-1).mean()  ## to minimze regret
+        self.log("train_loss",loss, prog_bar=True, on_step=True, on_epoch=True, )
+        return loss
+        
+class IMLE_norm_2(baseline_mse):
+    def __init__(self,weights,capacity,n_items, k=5, nb_iterations=100,nb_samples=5, beta=10.0,
+            temperature=1.0,   lr=1e-1,seed=0,scheduler=False, **kwd):
+        super().__init__(weights,capacity,n_items,lr,seed, scheduler)
+        imle_solver = lambda y_: batch_solve(self.solver,y_)
+
+        target_distribution = TargetDistribution(alpha=1.0, beta=beta)
+        noise_distribution = SumOfGammaNoiseDistribution(k= k, nb_iterations= nb_iterations)
+
+        self.layer = imle(imle_solver,  target_distribution=target_distribution,noise_distribution=noise_distribution,
+                    input_noise_temperature= temperature, target_noise_temperature= temperature,
+                    nb_samples= nb_samples)
+    def training_step(self, batch, batch_idx):
+        x,y,sol = batch
+        y_hat =  self(x).squeeze()
+        
+        normalized_y_hat = torch.zeros(y_hat.shape)
+        for i in range(len(y_hat)):
+            normalized_y_hat[i] = y_hat[i]*1./torch.linalg.norm(y_hat[i])
+        sol_hat = self.layer(normalized_y_hat) 
+        
+        normalized_y = torch.zeros(y.shape)
+        for i in range(len(y_hat)):
+            normalized_y[i] = y[i]*1./torch.linalg.norm(y[i])
+        
+        loss = ((sol - sol_hat)*normalized_y).sum(-1).mean()  ## to minimze regret
+        self.log("train_loss",loss, prog_bar=True, on_step=True, on_epoch=True, )
+        return loss
+        
 class DCOL(baseline_mse):
     '''
     Implementation oF QPTL using cvxpyayers
@@ -268,22 +437,6 @@ class DCOL(baseline_mse):
 
 
 class IntOpt(baseline_mse):
-    """
-    Implementation of
-    Homogeneous Selfdual Embedding 
-    (Ref: https://proceedings.neurips.cc/paper/2020/hash/51311013e51adebc3c34d2cc591fefee-Abstract.html)
-    Args:
-        weights (np.ndarray): Array of item weights
-        capacity (float): Knapsack capacity
-        n_items (int): Number of items
-        thr: the threshold for the 
-        damping: the damping parameter for the solver
-        lr: learning rate
-        l1_weight: the lasso regularization weight
-        max_epoch: maximum number of epcohs
-        seed: seed for reproducibility 
-        scheduler: the scheduler for learning rate
-    """
     def __init__(self,weights,capacity,n_items,thr=0.1,damping=1e-3,lr=1e-1,seed=0,scheduler=False, **kwd):
         super().__init__(weights,capacity,n_items,lr,seed, scheduler)
         self.comblayer = intopt_knapsack_solver(weights,capacity,n_items, thr= thr,damping= damping)
@@ -298,27 +451,11 @@ class IntOpt(baseline_mse):
 
 from Trainer.CacheLosses import *
 class CachingPO(baseline_mse):
-    """
-    Implementation of
-    Caching for Pairwise Ranking
-    (Ref: https://proceedings.neurips.cc/paper/2020/hash/51311013e51adebc3c34d2cc591fefee-Abstract.html)
-    Args:
-        weights (np.ndarray): Array of item weights
-        capacity (float): Knapsack capacity
-        n_items (int): Number of items
-        init_cache: the initial cache
-        tau: the margin parameter for pairwise ranking / temperatrure for listwise ranking
-        growth: the growth parameter for the cache
-        loss: the loss function
-        lr: learning rate
-        l1_weight: the lasso regularization weight
-        max_epoch: maximum number of epcohs
-        seed: seed for reproducibility 
-        scheduler: the scheduler for learning rate
-    """
     def __init__(self, weights,capacity,n_items,init_cache,tau=1.,growth=0.1,loss="listwise",lr=1e-1,seed=0,scheduler=False, **kwd):
         super().__init__(weights,capacity,n_items,lr,seed, scheduler)
-  
+        '''tau: the margin parameter for pairwise ranking / temperatrure for listwise ranking
+        '''
+
 
         if loss=="pointwise":
             self.loss_fn = PointwiseLoss()

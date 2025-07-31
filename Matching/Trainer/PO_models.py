@@ -62,7 +62,11 @@ class baseline_mse(pl.LightningModule):
         criterion2 = nn.BCELoss(reduction='mean')
         bceloss = criterion2(y_hat, sol)
 
-
+        # val_norm = (criterion1(y_hat, torch.zeros(y_hat.shape))-1)*(criterion1(y_hat, torch.zeros(y_hat.shape))-1)
+        # val_norm = (criterion1(y_hat, torch.zeros(y_hat.shape))-criterion1(y, torch.zeros(y.shape)))*(criterion1(y_hat, torch.zeros(y_hat.shape))-criterion1(y, torch.zeros(y.shape)))
+        val_norm = criterion1(torch.var(y_hat,dim=1),torch.var(y,dim=1))
+        
+        self.log("val_norm", val_norm, prog_bar=True, on_step=False, on_epoch=True, )
         self.log("val_regret", val_loss, prog_bar=True, on_step=False, on_epoch=True, )
         self.log("val_mse", mseloss, prog_bar=True, on_step=False, on_epoch=True, )
         self.log("val_bce", bceloss, prog_bar=True, on_step=False, on_epoch=True, )
@@ -135,17 +139,59 @@ class baseline_bce(baseline_mse):
         loss = criterion(y_hat,sol)
         self.log("train_loss",loss, prog_bar=True, on_step=True, on_epoch=True, )
         return loss   
-
-
+       
+        
 class SPO(baseline_mse):
-    def __init__(self,solver, lr=1e-1,mode='sigmoid',n_layers=2,seed=0,scheduler=False, **kwd):
+    def __init__(self,solver, lr=1e-1, alpha=2, mode='sigmoid',n_layers=2,seed=0,scheduler=False, **kwd):
         super().__init__(solver,lr,mode,n_layers,seed, scheduler)
-        self.layer = SPOlayer(solver)
+        self.layer = SPOlayer(solver, alpha=alpha)
         # self.automatic_optimization = False
     def training_step(self, batch, batch_idx):
         x,y,sol,m = batch
         y_hat =  self(x).squeeze()
         loss =  self.layer(y_hat, y,sol,m ) 
+        self.log("train_loss",loss, prog_bar=True, on_step=True, on_epoch=True, )
+        return loss
+
+class SPO_norm(baseline_mse):
+    def __init__(self,solver, lr=1e-1, alpha=2, mode='sigmoid',n_layers=2,seed=0,scheduler=False, **kwd):
+        super().__init__(solver,lr,mode,n_layers,seed, scheduler)
+        self.layer = SPOlayer(solver, alpha=alpha)
+        # self.automatic_optimization = False
+    def training_step(self, batch, batch_idx):
+        x,y,sol,m = batch
+        y_hat =  self(x).squeeze()
+        
+        normalized_y_hat = torch.zeros(y_hat.shape)
+        for i in range(len(y_hat)):
+            normalized_y_hat[i] = y_hat[i]*1./torch.sqrt(torch.var(y_hat[i]))
+        
+        normalized_y = torch.zeros(y.shape)
+        for i in range(len(y)):
+            normalized_y[i] = y[i]*1./torch.sqrt(torch.var(y[i])) 
+        
+        loss =  self.layer(normalized_y_hat, normalized_y,sol,m ) 
+        self.log("train_loss",loss, prog_bar=True, on_step=True, on_epoch=True, )
+        return loss
+        
+class SPO_norm_2(baseline_mse):
+    def __init__(self,solver, lr=1e-1, alpha=2, mode='sigmoid',n_layers=2,seed=0,scheduler=False, **kwd):
+        super().__init__(solver,lr,mode,n_layers,seed, scheduler)
+        self.layer = SPOlayer(solver, alpha=alpha)
+        # self.automatic_optimization = False
+    def training_step(self, batch, batch_idx):
+        x,y,sol,m = batch
+        y_hat =  self(x).squeeze()
+        
+        normalized_y_hat = torch.zeros(y_hat.shape)
+        for i in range(len(y_hat)):
+            normalized_y_hat[i] = y_hat[i]*1./torch.norm(y_hat[i])
+        
+        normalized_y = torch.zeros(y.shape)
+        for i in range(len(y)):
+            normalized_y[i] = y[i]*1./torch.norm(y[i])
+        
+        loss =  self.layer(normalized_y_hat, normalized_y,sol,m ) 
         self.log("train_loss",loss, prog_bar=True, on_step=True, on_epoch=True, )
         return loss
 
@@ -160,6 +206,58 @@ class DBB(baseline_mse):
         loss = ((sol - sol_hat)*y).sum(-1).mean()
         self.log("train_loss",loss, prog_bar=True, on_step=True, on_epoch=True, )
         return loss
+        
+        
+class DBB_norm(baseline_mse):
+    def __init__(self, solver,lr=1e-1,lambda_val=0.1,mode='sigmoid',n_layers=2, seed=0,scheduler=False, **kwd):
+        super().__init__(solver,lr,mode,n_layers,seed, scheduler)
+        self.layer = DBBlayer(solver,lambda_val=lambda_val)
+    
+
+    def training_step(self, batch, batch_idx):
+        x,y,sol,m = batch
+        
+        y_hat =  self(x).squeeze()
+
+        normalized_y_hat = torch.zeros(y_hat.shape)
+        for i in range(len(y_hat)):
+            normalized_y_hat[i] = y_hat[i]*1./(torch.sqrt(torch.var(y_hat[i])))   
+
+        normalized_y = torch.zeros(y.shape)
+        for i in range(len(y_hat)):
+            normalized_y[i] = y[i]*1./(torch.sqrt(torch.var(y[i])))
+        
+        sol_hat = self.layer(normalized_y_hat, normalized_y,sol,m ) 
+        
+        loss = ((sol - sol_hat)*normalized_y).sum(-1).mean()
+        self.log("train_loss",loss, prog_bar=True, on_step=True, on_epoch=True, )
+        return loss
+        
+class DBB_norm_2(baseline_mse):
+    def __init__(self, solver,lr=1e-1,lambda_val=0.1,mode='sigmoid',n_layers=2, seed=0,scheduler=False, **kwd):
+        super().__init__(solver,lr,mode,n_layers,seed, scheduler)
+        self.layer = DBBlayer(solver,lambda_val=lambda_val)
+    
+
+    def training_step(self, batch, batch_idx):
+        x,y,sol,m = batch
+        
+        y_hat =  self(x).squeeze()
+
+        normalized_y_hat = torch.zeros(y_hat.shape)
+        for i in range(len(y_hat)):
+            normalized_y_hat[i] = y_hat[i]*1./(torch.linalg.norm(y_hat[i]))       
+        
+        normalized_y = torch.zeros(y.shape)
+        for i in range(len(y_hat)):
+            normalized_y[i] = y[i]*1./(torch.linalg.norm(y[i]))
+        
+        sol_hat = self.layer(normalized_y_hat, normalized_y,sol,m ) 
+        
+        loss = ((sol - sol_hat)*normalized_y).sum(-1).mean()
+        self.log("train_loss",loss, prog_bar=True, on_step=True, on_epoch=True, )
+        return loss
+        
 
 class FenchelYoung(baseline_mse):
     def __init__(self,solver,sigma=0.1,num_samples=10, 
@@ -190,6 +288,88 @@ class FenchelYoung(baseline_mse):
         self.log("train_loss",loss, prog_bar=True, on_step=True, on_epoch=True, )
         return loss
 
+class DPO_norm(baseline_mse):
+    def __init__(self,solver,sigma=0.1,alpha=1,num_samples=10, 
+        lr=1e-1,mode='sigmoid',n_layers=2, seed=0,scheduler=False, **kwd):
+        self.sigma = sigma
+        self.alpha = alpha
+        self.num_samples = num_samples
+        super().__init__(solver,lr,mode,n_layers,seed, scheduler)
+    def training_step(self, batch, batch_idx):
+        x,y,sol,m = batch
+        y_hat =  self(x).squeeze()
+        loss = 0
+        normalized_y_hat = torch.zeros(y_hat.shape)
+        for i in range(len(y_hat)):
+            def solver(y_):
+                sol = []
+                ### FY extend the size of y to num_sample*batch
+                for j in range(len(y_)):
+                     sol.append(  batch_solve(self.solver,y_[j],m[i],batched=False).unsqueeze(0) )
+                
+                return torch.cat(sol).float()
+            normalized_y_hat[i] = y_hat[i]*1./(1e-5+torch.sqrt(torch.var(y_hat[i])))
+            op = perturbations.perturbed(solver, num_samples= self.num_samples, sigma= self.sigma, noise='normal', batched= False)( normalized_y_hat[i] )
+            loss += y[i].dot(sol[i] - op)
+        loss /= len(y_hat)
+        self.log("train_loss",loss, prog_bar=True, on_step=True, on_epoch=True, )
+        return loss
+
+class DPO_norm_2(baseline_mse):
+    def __init__(self,solver,sigma=0.1,alpha=1,num_samples=10, 
+        lr=1e-1,mode='sigmoid',n_layers=2, seed=0,scheduler=False, **kwd):
+        self.sigma = sigma
+        self.alpha = alpha
+        self.num_samples = num_samples
+        super().__init__(solver,lr,mode,n_layers,seed, scheduler)
+    def training_step(self, batch, batch_idx):
+        x,y,sol,m = batch
+        y_hat =  self(x).squeeze()
+        loss = 0
+        normalized_y_hat = torch.zeros(y_hat.shape)
+        for i in range(len(y_hat)):
+            def solver(y_):
+                sol = []
+                ### FY extend the size of y to num_sample*batch
+                for j in range(len(y_)):
+                     sol.append(  batch_solve(self.solver,y_[j],m[i],batched=False).unsqueeze(0) )
+                
+                return torch.cat(sol).float()
+            normalized_y_hat[i] = y_hat[i]*1./(1e-5+torch.norm(y_hat[i]))
+            op = perturbations.perturbed(solver, num_samples= self.num_samples, sigma= self.sigma, noise='normal', batched= False)( normalized_y_hat[i] )
+            loss += y[i].dot(sol[i] - op)
+        loss /= len(y_hat)
+        self.log("train_loss",loss, prog_bar=True, on_step=True, on_epoch=True, )
+        return loss
+        
+class DPO_norm_2_tst(baseline_mse):
+    def __init__(self,solver,sigma=0.1,alpha=1,num_samples=10, 
+        lr=1e-1,mode='sigmoid',n_layers=2, seed=0,scheduler=False, **kwd):
+        self.sigma = sigma
+        self.alpha = alpha
+        self.num_samples = num_samples
+        super().__init__(solver,lr,mode,n_layers,seed, scheduler)
+    def training_step(self, batch, batch_idx):
+        x,y,sol,m = batch
+        y_hat =  self(x).squeeze()
+        loss = 0
+        normalized_y_hat = torch.zeros(y_hat.shape)
+        for i in range(len(y_hat)):
+            def solver(y_):
+                sol = []
+                ### FY extend the size of y to num_sample*batch
+                for j in range(len(y_)):
+                     sol.append(  batch_solve(self.solver,y_[j],m[i],batched=False).unsqueeze(0) )
+                
+                return torch.cat(sol).float()
+            normalized_y_hat[i] = y_hat[i]*1./(1+torch.norm(y_hat[i]))
+            op = perturbations.perturbed(solver, num_samples= self.num_samples, sigma= self.sigma, noise='normal', batched= False)( normalized_y_hat[i] )
+            loss += y[i].dot(sol[i] - op)
+        loss /= len(y_hat)
+        self.log("train_loss",loss, prog_bar=True, on_step=True, on_epoch=True, )
+        return loss
+
+
 class DPO(baseline_mse):
     def __init__(self,solver,sigma=0.1,num_samples=10, 
         lr=1e-1,mode='sigmoid',n_layers=2, seed=0,scheduler=False, **kwd):
@@ -208,14 +388,12 @@ class DPO(baseline_mse):
                      sol.append(  batch_solve(self.solver,y_[j],m[i],batched=False).unsqueeze(0) )
                 
                 return torch.cat(sol).float()
-            op = perturbations.perturbed(solver, num_samples= self.num_samples, sigma= self.sigma,noise='gumbel', batched= False)( y_hat[i] )
+            op = perturbations.perturbed(solver, num_samples= self.num_samples, sigma= self.sigma,noise='normal', batched= False)( y_hat[i] )
             loss += y[i].dot(sol[i] - op)
         loss /= len(y_hat)
 
         self.log("train_loss",loss, prog_bar=True, on_step=True, on_epoch=True, )
         return loss
-
-
 
 class IMLE(baseline_mse):
     def __init__(self,solver,k=5, nb_iterations=100,nb_samples=1, beta=10.0,
@@ -252,6 +430,90 @@ class IMLE(baseline_mse):
                     input_noise_temperature= input_noise_temperature, target_noise_temperature= target_noise_temperature,
                     nb_samples= nb_samples)( y_hat[i].view(1,-1) ).squeeze()
             loss += y[i].dot(sol[i] - op)
+        loss /= len(y_hat)
+
+        self.log("train_loss",loss, prog_bar=True, on_step=True, on_epoch=True, )
+        return loss
+        
+class IMLE_norm(baseline_mse):
+    def __init__(self,solver,k=5, nb_iterations=100,nb_samples=1, beta=10.0,
+            temperature=1.0,
+            lr=1e-1,mode='sigmoid',n_layers=2, seed=0,scheduler=False, **kwd):
+
+        super().__init__(solver,lr,mode,n_layers,seed, scheduler) 
+
+        self.target_distribution = TargetDistribution(alpha=1.0, beta=beta)
+        self.noise_distribution = SumOfGammaNoiseDistribution(k= k, nb_iterations= nb_iterations)
+
+        self.input_noise_temperature= temperature
+        self.target_noise_temperature= temperature
+        self.nb_samples= nb_samples
+    def training_step(self, batch, batch_idx):
+
+        input_noise_temperature= self.input_noise_temperature
+        target_noise_temperature= self.target_noise_temperature
+        nb_samples= self.nb_samples
+        target_distribution = self.target_distribution
+        noise_distribution = self.noise_distribution
+
+
+        x,y,sol,m = batch
+        y_hat =  self(x).squeeze()
+        loss = 0
+        for i in range(len(y_hat)):
+            def imle_solver(y_):
+                sol = []
+                for j in range(len(y_)):
+                     sol.append(  batch_solve(self.solver,y_[j],m[i],batched=False).unsqueeze(0) )
+                return torch.cat(sol).float()
+            normalized_y_hat = (y_hat[i].view(1,-1))*1./torch.sqrt(torch.var(y_hat[i]))
+            normalized_y = y[i]*1./torch.sqrt(torch.var(y[i]))
+            op = imle(imle_solver,  target_distribution=target_distribution,noise_distribution=noise_distribution,
+                    input_noise_temperature= input_noise_temperature, target_noise_temperature= target_noise_temperature,
+                    nb_samples= nb_samples)( normalized_y_hat).squeeze()
+            loss += normalized_y.dot(sol[i] - op)
+        loss /= len(y_hat)
+
+        self.log("train_loss",loss, prog_bar=True, on_step=True, on_epoch=True, )
+        return loss
+        
+class IMLE_norm_2(baseline_mse):
+    def __init__(self,solver,k=5, nb_iterations=100,nb_samples=1, beta=10.0,
+            temperature=1.0,
+            lr=1e-1,mode='sigmoid',n_layers=2, seed=0,scheduler=False, **kwd):
+
+        super().__init__(solver,lr,mode,n_layers,seed, scheduler) 
+
+        self.target_distribution = TargetDistribution(alpha=1.0, beta=beta)
+        self.noise_distribution = SumOfGammaNoiseDistribution(k= k, nb_iterations= nb_iterations)
+
+        self.input_noise_temperature= temperature
+        self.target_noise_temperature= temperature
+        self.nb_samples= nb_samples
+    def training_step(self, batch, batch_idx):
+
+        input_noise_temperature= self.input_noise_temperature
+        target_noise_temperature= self.target_noise_temperature
+        nb_samples= self.nb_samples
+        target_distribution = self.target_distribution
+        noise_distribution = self.noise_distribution
+
+
+        x,y,sol,m = batch
+        y_hat =  self(x).squeeze()
+        loss = 0
+        for i in range(len(y_hat)):
+            def imle_solver(y_):
+                sol = []
+                for j in range(len(y_)):
+                     sol.append(  batch_solve(self.solver,y_[j],m[i],batched=False).unsqueeze(0) )
+                return torch.cat(sol).float()
+            normalized_y_hat = (y_hat[i].view(1,-1))*1./torch.norm(y_hat[i])
+            normalized_y = y[i]*1./torch.norm(y[i])
+            op = imle(imle_solver,  target_distribution=target_distribution,noise_distribution=noise_distribution,
+                    input_noise_temperature= input_noise_temperature, target_noise_temperature= target_noise_temperature,
+                    nb_samples= nb_samples)( normalized_y_hat ).squeeze()
+            loss += normalized_y.dot(sol[i] - op)
         loss /= len(y_hat)
 
         self.log("train_loss",loss, prog_bar=True, on_step=True, on_epoch=True, )

@@ -31,6 +31,7 @@ class PerturbedFunc(torch.autograd.Function):
     @staticmethod
     def forward(ctx, input_tensor, y_true, perturbed, batched, maximize, *args):
         diff = perturbed(input_tensor, *args) - y_true.type(input_tensor.dtype)
+        # diff = input_tensor - y_true.type(input_tensor.dtype)
         if not maximize:
             diff = -diff
         # Computes per-example loss for batched inputs.

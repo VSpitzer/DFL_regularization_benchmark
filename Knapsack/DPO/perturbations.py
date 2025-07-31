@@ -174,6 +174,22 @@ def perturbed(func=None,
                 if not batched:  # Removes dummy batch dimension.
                     forward_output = forward_output[0]
 
+                #Zero grad
+                # epsilon = 1e-5
+                # diff = torch.abs(perturbed_output - perturbed_output[0:1, :, :])
+                # is_constant = (diff < epsilon).all(dim=0).all(dim=-1)
+                # mask = is_constant.unsqueeze(0).unsqueeze(-1)
+                # mask = mask.expand_as(noise_gradient)
+                # noise_gradient = noise_gradient.masked_fill(mask, 0.0)
+
+                # epsilon = 1e-5   
+                # diff = torch.abs(perturbed_output - perturbed_output[0:1, :, :])   
+                # is_constant = (diff < epsilon).all(dim=0).all(dim=-1)   
+                # if is_constant.any():
+                    # noise_gradient.zero_()   
+                    # print("noise_gradient annulé car au moins une colonne est constante.")
+                
+                    
                 # Save context for backward pass
                 ctx.save_for_backward(perturbed_input, perturbed_output, noise_gradient)
                 ctx.original_input_shape = original_input_shape
@@ -200,7 +216,8 @@ def perturbed(func=None,
                 noise_grad = flatten(noise_grad)  # (N, B, D)
 
                 g = torch.einsum('nbd,nb->bd', noise_grad, torch.einsum('nbd,bd->nb', output, dy))
-                g /= sigma * num_samples
+                # g /= sigma * num_samples
+                g /= num_samples
                 return torch.reshape(g, original_input_shape)
 
         return PerturbedFunc.apply(input_tensor, *args)
