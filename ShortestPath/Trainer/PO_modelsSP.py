@@ -188,7 +188,7 @@ class SPO(baseline):
         self.log("train_loss",loss/len(y),  on_step=True, on_epoch=True, )
         return training_loss  
 
-class SPO_norm(baseline):
+class SPO_sd_norm(baseline):
     def __init__(self,net,exact_solver = spsolver,lr=1e-1,  alpha=2., l1_weight=1e-5,max_epochs=30, seed=20, scheduler=False, **kwd):
         """
         Implementaion of SPO+ loss subclass of twostage model
@@ -222,7 +222,7 @@ class SPO_norm(baseline):
         self.log("train_loss",loss/len(y),  on_step=True, on_epoch=True, )
         return training_loss  
 
-class SPO_norm_2(baseline):
+class SPO_L2_norm(baseline):
     def __init__(self,net,exact_solver = spsolver,lr=1e-1,  alpha=2., l1_weight=1e-5,max_epochs=30, seed=20, scheduler=False, **kwd):
         """
         Implementaion of SPO+ loss subclass of twostage model
@@ -294,7 +294,7 @@ class DBB(baseline):
         self.log("train_loss", ((sol_hat - sol)*y).sum(-1).mean(),  on_step=True, on_epoch=True, )
         return training_loss   
         
-class DBB_norm(baseline):
+class DBB_sd_norm(baseline):
     def __init__(self,net,exact_solver = spsolver,lr=1e-1,lambda_val =0.1, l1_weight=1e-5,max_epochs=30, seed=20, scheduler=False, **kwd):
         super().__init__(net,exact_solver, lr, l1_weight,max_epochs, seed, scheduler)
         self.lambda_val = lambda_val
@@ -324,7 +324,7 @@ class DBB_norm(baseline):
         return training_loss 
         
         
-class DBB_norm_2(baseline):
+class DBB_L2_norm(baseline):
     def __init__(self,net,exact_solver = spsolver,lr=1e-1,lambda_val =0.1, l1_weight=1e-5,max_epochs=30, seed=20, scheduler=False, **kwd):
         super().__init__(net,exact_solver, lr, l1_weight,max_epochs, seed, scheduler)
         self.lambda_val = lambda_val
@@ -353,288 +353,6 @@ class DBB_norm_2(baseline):
         self.log("train_loss", ((sol_hat - sol)*normalized_y).sum(-1).mean(),  on_step=True, on_epoch=True, )
         return training_loss 
         
-from Trainer.CacheLosses import *
-class CachingPO(baseline):
-    def __init__(self,loss,init_cache, net,exact_solver = spsolver,growth=0.1,tau=0.,lr=1e-1,
-        l1_weight=1e-5,max_epochs=30, seed=20, scheduler=False, **kwd):
-        """
-        A class to implement loss functions using soluton caching
-        Args:
-            loss: the loss function (NCE, MAP or the rank-based ones)
-            init_cache: initial solution cache
-            growth: p_solve
-            tau: the margin parameter for pairwise ranking / temperatrure for listwise ranking
-            net: the neural network model
-            exact_solver: the solver which returns a shortest path solution given the edge cost
-            lr: learning rate
-            l1_weight: the lasso regularization weight
-            max_epoch: maximum number of epcohs
-            seed: seed for reproducibility 
-
-        """
-        super().__init__(net,exact_solver, lr, l1_weight,max_epochs, seed, scheduler)
-        # self.save_hyperparameters()
-        if loss=="pointwise":
-            self.loss_fn = PointwiseLoss()
-        elif loss=="pairwise":
-            self.loss_fn = PairwiseLoss(margin=tau)
-        elif loss == "pairwise_diff":
-            self.loss_fn = PairwisediffLoss()
-        elif loss == "listwise":
-            self.loss_fn = ListwiseLoss(temperature=tau)
-        elif loss== 'NCE':
-            self.loss_fn = NCE()
-        elif loss== 'MAP':
-            self.loss_fn = MAP()
-        elif loss== 'NCE_c':
-            self.loss_fn = NCE_c()
-        elif loss== 'MAP_c':
-            self.loss_fn = MAP_c()
-
-        elif loss== 'SPO':
-            self.loss_fn = SPOCaching()
-        else:
-            raise Exception("Invalid Loss Provided")
-        ### The cache
-        init_cache_np = init_cache.detach().numpy()
-        init_cache_np = np.unique(init_cache_np,axis=0)
-        # torch has no unique function, so we have to do this
-        self.cache = torch.from_numpy(init_cache_np).float()
-        self.growth = growth
-        self.tau = tau
-        self.save_hyperparameters("lr","growth","tau")
-    
- 
-    def training_step(self, batch, batch_idx):
-        x,y, sol = batch
-        y_hat =  self(x).squeeze()
-        if (np.random.random(1)[0]<= self.growth) or len(self.cache)==0:
-            self.cache = growcache(self.exact_solver, self.cache, y_hat)
-
-  
-        loss = self.loss_fn(y_hat,y,sol,self.cache)
-        l1penalty = sum([(param.abs()).sum() for param in self.net.parameters()])
-        training_loss=  loss/len(y)  + l1penalty * self.l1_weight
-        self.log("train_totalloss",training_loss, prog_bar=True, on_step=True, on_epoch=True, )
-        self.log("train_l1penalty",l1penalty * self.l1_weight,  on_step=True, on_epoch=True, )
-        self.log("train_loss",loss/len(y),  on_step=True, on_epoch=True, )
-        return training_loss  
-
-
-
-###################################### This approach use it's own solver #########################################
-
-
-
-class DCOL(baseline):
-    '''
-    Implementation of
-    Differentiable Convex Optimization Layers (DCOL)
-    Args:
-        net: the neural network model
-        exact_solver: the solver which returns a shortest path solution given the edge cost
-        lr: learning rate
-        l1_weight: the lasso regularization weight
-        max_epoch: maximum number of epcohs
-        seed: seed for reproducibility 
-        mu: the regularization parameter
-        regularizer: the type of regularizer
-        scheduler: the scheduler for learning rate
-    '''
-    def __init__(self, net, exact_solver = spsolver,lr=1e-1, l1_weight=1e-5,max_epochs=30, seed=20,mu=0.1,regularizer='quadratic', scheduler= False,**kwd):
-        super().__init__(net,exact_solver, lr, l1_weight,max_epochs, seed, scheduler)
-        self.layer = cvxsolver(mu=mu, regularizer=regularizer)
-        self.save_hyperparameters("lr","mu")
-    def training_step(self, batch, batch_idx):
-   
-        x,y, sol = batch
-        y_hat =  self(x).squeeze()
-        loss = 0
-        l1penalty = sum([(param.abs()).sum() for param in self.net.parameters()])
-
-        sol_hat = self.layer.shortest_pathsolution(y_hat)
-        training_loss =  ((sol_hat - sol)*y).sum(-1).mean() + l1penalty * self.l1_weight
-
-        # for ii in range(len(y)):
-        #     sol_hat = self.layer.shortest_pathsolution(y_hat[ii])
-        #     ### The loss is regret but c.dot(y) is constant so need not to be considered
-        #     loss +=  (sol_hat ).dot(y[ii])
- 
-        # training_loss=  loss/len(y)  + l1penalty * self.l1_weight
-        self.log("train_totalloss",training_loss, prog_bar=True, on_step=True, on_epoch=True, )
-        self.log("train_l1penalty",l1penalty * self.l1_weight,  on_step=True, on_epoch=True, )
-        self.log("train_loss",loss/len(y),  on_step=True, on_epoch=True, )
-        return training_loss 
-
-class QPTL(DCOL):
-    '''
-    Implementation of
-    Differentiable Convex Optimization Layers (DCOL)
-    '''
-    def __init__(self,net,exact_solver = spsolver,lr=1e-1, l1_weight=1e-5,  max_epochs=30, seed=20,mu=0.1, scheduler=False, **kwd):
-        super().__init__(net,exact_solver,lr, l1_weight,max_epochs, seed, mu,  scheduler=scheduler)  
-        self.solver = qpsolver( mu=mu)
-    
-class IntOpt(DCOL):
-    '''
-    Implementation of
-    Homogeneous Selfdual Embedding 
-    (Ref: https://proceedings.neurips.cc/paper/2020/hash/51311013e51adebc3c34d2cc591fefee-Abstract.html)
-    Args:
-        net: the neural network model
-        exact_solver: the solver which returns a shortest path solution given the edge cost
-        thr: the threshold for the solver
-        damping: the damping parameter for the solver
-        diffKKT: whether to use the KKT conditions
-        lr: learning rate
-        l1_weight: the lasso regularization weight
-        max_epoch: maximum number of epcohs
-        seed: seed for reproducibility 
-        scheduler: the scheduler for learning rate
-    '''
-    def __init__(self,net,exact_solver = spsolver,thr=0.1,damping=1e-3,diffKKT = False, lr=1e-1, l1_weight=1e-5,max_epochs=30, seed=20, scheduler=False, **kwd):
-        super().__init__(net,exact_solver , lr, l1_weight,max_epochs, seed, scheduler=scheduler)  
-        self.solver  = intoptsolver(thr=thr,damping=damping, diffKKT = diffKKT )
-        self.save_hyperparameters("lr","thr", "damping")
-
-
-
-class IMLE(baseline):
-    '''
-    Implementation of
-    Implicit MLE (I-MLE): Backpropagating Through Discrete Exponential Family Distributions 
-    (Ref: https://github.com/uclnlp/torch-imle/blob/main/annotation-cli.py)
-    Args:
-        net: the neural network model
-        exact_solver: the solver which returns a shortest path solution given the edge cost
-        solver: the solver which returns a shortest path solution given the edge cost
-        k: the number of iterations
-        nb_iterations: the number of iterations
-        nb_samples: the number of samples
-        beta: the beta parameter for the solver
-        temperature: the temperature for the solver
-        lr: learning rate
-        l1_weight: the lasso regularization weight
-        max_epoch: maximum number of epcohs
-        seed: seed for reproducibility 
-        scheduler: the scheduler for learning rate
-    '''
-    def __init__(self,net,solver=spsolver,exact_solver = spsolver,k=5,nb_iterations=100,nb_samples=1, beta=10.,
-            temperature=1.0, lr=1e-1,l1_weight=1e-5,max_epochs=30,seed=20 , scheduler=False, **kwd):
-        super().__init__(net,exact_solver , lr, l1_weight, max_epochs, seed, scheduler)
-        self.solver = solver
-        self.k = k
-        self.nb_iterations = nb_iterations
-        self.nb_samples = nb_samples
-        # self.target_noise_temperature = target_noise_temperature
-        # self.input_noise_temperature = input_noise_temperature
-        target_distribution = TargetDistribution(alpha=1.0, beta= beta)
-        noise_distribution = SumOfGammaNoiseDistribution(k= self.k, nb_iterations=self.nb_iterations)
-
-        imle_solver = lambda y_: solver.solution_fromtorch(-y_)
-
-        self.imle_layer = imle(imle_solver,target_distribution=target_distribution,
-        noise_distribution=noise_distribution, input_noise_temperature= temperature, 
-        target_noise_temperature= temperature,nb_samples=self.nb_samples)
-        self.save_hyperparameters("lr", "beta", "temperature", "k", "nb_iterations", "nb_samples")
-    def training_step(self, batch, batch_idx):
-        x,y, sol = batch
-        y_hat =  self(x).squeeze()
-        l1penalty = sum([(param.abs()).sum() for param in self.net.parameters()])
-        
-        sol_hat = self.imle_layer(-y_hat)
-        loss = ((sol_hat - sol)*y).sum(-1).mean()
-        training_loss= loss  + l1penalty * self.l1_weight
-
-        self.log("train_totalloss",training_loss, prog_bar=True, on_step=True, on_epoch=True, )
-        self.log("train_l1penalty",l1penalty * self.l1_weight,  on_step=True, on_epoch=True, )
-        self.log("train_loss",loss,  on_step=True, on_epoch=True, )
-        return training_loss 
-        
-class IMLE_norm(baseline):
-    def __init__(self,net,solver=spsolver,exact_solver = spsolver,k=5,nb_iterations=100,nb_samples=1, beta=10.,
-            temperature=1.0, lr=1e-1,l1_weight=1e-5,max_epochs=30,seed=20 , scheduler=False, **kwd):
-        super().__init__(net,exact_solver , lr, l1_weight, max_epochs, seed, scheduler)
-        self.solver = solver
-        self.k = k
-        self.nb_iterations = nb_iterations
-        self.nb_samples = nb_samples
-        # self.target_noise_temperature = target_noise_temperature
-        # self.input_noise_temperature = input_noise_temperature
-        target_distribution = TargetDistribution(alpha=1.0, beta= beta)
-        noise_distribution = SumOfGammaNoiseDistribution(k= self.k, nb_iterations=self.nb_iterations)
-
-        imle_solver = lambda y_: solver.solution_fromtorch(-y_)
-
-        self.imle_layer = imle(imle_solver,target_distribution=target_distribution,
-        noise_distribution=noise_distribution, input_noise_temperature= temperature, 
-        target_noise_temperature= temperature,nb_samples=self.nb_samples)
-        self.save_hyperparameters("lr", "beta", "temperature", "k", "nb_iterations", "nb_samples")
-    def training_step(self, batch, batch_idx):
-        x,y, sol = batch
-        y_hat =  self(x).squeeze()
-        l1penalty = sum([(param.abs()).sum() for param in self.net.parameters()])
-        
-        normalized_y_hat = torch.zeros(y_hat.shape)
-        for i in range(len(y_hat)):
-            normalized_y_hat[i] = y_hat[i]*1./torch.sqrt(torch.var(y_hat[i]))
-        sol_hat = self.imle_layer(-normalized_y_hat) 
-
-        normalized_y = torch.zeros(y.shape)
-        for i in range(len(y_hat)):
-            normalized_y[i] = y[i]*1./torch.sqrt(torch.var(y[i]))
-
-        loss = ((sol_hat - sol)*normalized_y).sum(-1).mean()
-        training_loss= loss  + l1penalty * self.l1_weight
-
-        self.log("train_totalloss",training_loss, prog_bar=True, on_step=True, on_epoch=True, )
-        self.log("train_l1penalty",l1penalty * self.l1_weight,  on_step=True, on_epoch=True, )
-        self.log("train_loss",loss,  on_step=True, on_epoch=True, )
-        return training_loss 
-        
-class IMLE_norm_2(baseline):
-    def __init__(self,net,solver=spsolver,exact_solver = spsolver,k=5,nb_iterations=100,nb_samples=1, beta=10.,
-            temperature=1.0, lr=1e-1,l1_weight=1e-5,max_epochs=30,seed=20 , scheduler=False, **kwd):
-        super().__init__(net,exact_solver , lr, l1_weight, max_epochs, seed, scheduler)
-        self.solver = solver
-        self.k = k
-        self.nb_iterations = nb_iterations
-        self.nb_samples = nb_samples
-        # self.target_noise_temperature = target_noise_temperature
-        # self.input_noise_temperature = input_noise_temperature
-        target_distribution = TargetDistribution(alpha=1.0, beta= beta)
-        noise_distribution = SumOfGammaNoiseDistribution(k= self.k, nb_iterations=self.nb_iterations)
-
-        imle_solver = lambda y_: solver.solution_fromtorch(-y_)
-
-        self.imle_layer = imle(imle_solver,target_distribution=target_distribution,
-        noise_distribution=noise_distribution, input_noise_temperature= temperature, 
-        target_noise_temperature= temperature,nb_samples=self.nb_samples)
-        self.save_hyperparameters("lr", "beta", "temperature", "k", "nb_iterations", "nb_samples")
-    def training_step(self, batch, batch_idx):
-        x,y, sol = batch
-        y_hat =  self(x).squeeze()
-        l1penalty = sum([(param.abs()).sum() for param in self.net.parameters()])
-        
-        normalized_y_hat = torch.zeros(y_hat.shape)
-        for i in range(len(y_hat)):
-            normalized_y_hat[i] = y_hat[i]*1./torch.linalg.norm(y_hat[i])
-        sol_hat = self.imle_layer(-normalized_y_hat) 
-
-        normalized_y = torch.zeros(y.shape)
-        for i in range(len(y_hat)):
-            normalized_y[i] = y[i]*1./torch.linalg.norm(y[i])
-
-        loss = ((sol_hat - sol)*normalized_y).sum(-1).mean()
-        training_loss= loss  + l1penalty * self.l1_weight
-
-        self.log("train_totalloss",training_loss, prog_bar=True, on_step=True, on_epoch=True, )
-        self.log("train_l1penalty",l1penalty * self.l1_weight,  on_step=True, on_epoch=True, )
-        self.log("train_loss",loss,  on_step=True, on_epoch=True, )
-        return training_loss 
-        
-        
-###################################### Differentiable Perturbed Optimizer #########################################
 
 class DPO(baseline):
     '''
@@ -678,7 +396,7 @@ class DPO(baseline):
         return training_loss
 
 
-class DPO_norm(baseline):
+class DPO_sd_norm(baseline):
     def __init__(self,net,solver=spsolver,exact_solver = spsolver,num_samples=10, sigma=0.1, lr=1e-1,l1_weight=1e-5, max_epochs= 30, seed=20, scheduler=False, **kwd):
         super().__init__(net,exact_solver , lr, l1_weight, max_epochs, seed, scheduler)
         self.solver = solver
@@ -707,7 +425,7 @@ class DPO_norm(baseline):
         self.log("train_loss",loss,  on_step=True, on_epoch=True, )
         return training_loss
         
-class DPO_norm_2(baseline):
+class DPO_L2_norm(baseline):
     def __init__(self,net,solver=spsolver,exact_solver = spsolver,num_samples=10, sigma=0.1, lr=1e-1,l1_weight=1e-5, max_epochs= 30, seed=20, scheduler=False, **kwd):
         super().__init__(net,exact_solver , lr, l1_weight, max_epochs, seed, scheduler)
         self.solver = solver
@@ -735,88 +453,3 @@ class DPO_norm_2(baseline):
         self.log("train_l1penalty",l1penalty * self.l1_weight,  on_step=True, on_epoch=True, )
         self.log("train_loss",loss,  on_step=True, on_epoch=True, )
         return training_loss
-
-class ADPO(baseline):
-    def __init__(self,net,solver=spsolver,exact_solver = spsolver,num_samples=10, sigma_max=1., sigma_min=0.001, N_periods=1, lr=1e-1,l1_weight=1e-5, max_epochs= 30, seed=20, scheduler=False, **kwd):
-        super().__init__(net,exact_solver , lr, l1_weight, max_epochs, seed, scheduler)
-        self.solver = solver
-        
-
-        len_periods = int(max_epochs*1./N_periods)
-        self.num_samples = num_samples
-        self.sigma_tab = np.zeros(max_epochs)
-        for i in range(N_periods):
-            self.sigma_tab[i*len_periods:(i+1)*len_periods] = np.array([sigma_min + (sigma_max-sigma_min)*(1-j*1./len_periods) for j in range(len_periods)])
-
-        self.save_hyperparameters("lr")
-    def training_step(self, batch, batch_idx):
-        x,y, sol = batch
-        y_hat =  self(x).squeeze()
-        l1penalty = sum([(param.abs()).sum() for param in self.net.parameters()])
-
-        @perturbations.perturbed(num_samples= self.num_samples, sigma= self.sigma_tab[self.current_epoch], noise='gumbel',batched = True)
-        def dpo_layer(y):
-            return spsolver.solution_fromtorch(y)
-        self.dpo_layer = dpo_layer
-        
-        normalized_y_hat = torch.zeros(y_hat.shape)
-        for i in range(len(y_hat)):
-            normalized_y_hat[i] = y_hat[i]*1./torch.sqrt(torch.var(y_hat[i]))
-        sol_hat = self.dpo_layer(normalized_y_hat) 
-
-        loss = ((sol_hat - sol)*y).sum(-1).mean()
-        training_loss= loss  + l1penalty * self.l1_weight        
-        self.log("train_totalloss",training_loss, prog_bar=True, on_step=True, on_epoch=True, )
-        self.log("train_l1penalty",l1penalty * self.l1_weight,  on_step=True, on_epoch=True, )
-        self.log("train_loss",loss,  on_step=True, on_epoch=True, )
-        return training_loss
-
-################################ Implementation of a Fenchel-Young loss using perturbation techniques #########################################
-
-class FenchelYoung(baseline):
-    '''
-    Implementation of
-    Fenchel-Young loss using perturbation techniques
-    (Ref: https://github.com/tuero/perturbations-differential-pytorch)
-    Args:
-        net: the neural network model
-        exact_solver: the solver which returns a shortest path solution given the edge cost
-        solver: the solver which returns a shortest path solution given the edge cost
-        num_samples: the number of samples
-        sigma: the standard deviation of the perturbation
-        lr: learning rate
-        l1_weight: the lasso regularization weight
-        max_epoch: maximum number of epcohs
-        seed: seed for reproducibility 
-        scheduler: the scheduler for learning rate
-    '''
-    def __init__(self,net,solver=spsolver,exact_solver = spsolver,num_samples=10, sigma=0.1,lr=1e-1, l1_weight=1e-5, max_epochs=30, seed=20, scheduler=False, **kwd):
-        super().__init__(net,exact_solver , lr, l1_weight, max_epochs, seed, scheduler)
-        self.solver = solver
-        self.num_samples = num_samples
-        self.sigma = sigma
-        self.save_hyperparameters("lr", "sigma", "num_samples")
-        self.fy_solver = lambda y_: solver.solution_fromtorch(y_)
-    def training_step(self, batch, batch_idx):
-        x,y, sol = batch
-        y_hat =  self(x).squeeze()
-        loss = 0
-        # solver= self.solver
-        
-
-        
-        # def fy_solver(y):
-        #     return spsolver.solution_fromtorch(y)
-        ############# Define the Loss functions, we can set maximization to be false
-
-        criterion = fy.FenchelYoungLoss(self.fy_solver, num_samples= self.num_samples, sigma= self.sigma,maximize = False,
-         batched=True)
-        l1penalty = sum([(param.abs()).sum() for param in self.net.parameters()])
-        loss = criterion(y_hat, sol).mean()
-    
-
-        training_loss=  loss + l1penalty * self.l1_weight
-        self.log("train_totalloss",training_loss, prog_bar=True, on_step=True, on_epoch=True, )
-        self.log("train_l1penalty",l1penalty * self.l1_weight,  on_step=True, on_epoch=True, )
-        self.log("train_loss",loss,  on_step=True, on_epoch=True, )
-        return training_loss 
