@@ -90,7 +90,7 @@ def seed_all(seed):
     
 def exec():
     # Load parameter sets from JSON filw
-    with open('config_DBB.json', "r") as json_file:
+    with open('config.json', "r") as json_file:
         parameter_sets = json.load(json_file)
 
     cpt=0

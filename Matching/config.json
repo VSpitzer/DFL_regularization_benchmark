@@ -1,209 +1,218 @@
 [
     {
-        "model": "DBB",
-        "instance": 1,
-        "lr": 0.01,
-        "lambda_val": 10.0
-    },
-    {
-        "model": "DBB",
-        "instance": 2,
-        "lr": 0.01,
-        "lambda_val": 0.1
-    },
-    {
-        "model": "DBB",
-        "instance": 3,
-        "lr": 0.01,
-        "lambda_val": 0.1
-    },
-    {
-        "model": "FenchelYoung",
-        "instance": 1,
-        "lr": 0.001,
-        "sigma": 0.5
-    },
-    {
-        "model": "FenchelYoung",
-        "instance": 2,
-        "lr": 0.001,
-        "sigma": 0.01
-    },
-    {
-        "model": "FenchelYoung",
-        "instance": 3,
-        "lr": 0.001,
-        "sigma": 5.0
-    },
-    {
-        "model": "IMLE",
-        "instance": 1,
-        "lr": 0.001,
-        "beta": 100.0,
-        "temperature": 0.5,
-        "k": 5
-    },
-    {
-        "model": "IMLE",
-        "instance": 2,
-        "lr": 0.001,
-        "beta": 100.0,
-        "temperature": 0.5,
-        "k": 5
-    },
-    {
-        "model": "IMLE",
-        "instance": 3,
-        "lr": 0.001,
-        "beta": 100.0,
-        "temperature": 0.5,
-        "k": 5
-    },
-    {
-        "model": "DCOL",
-        "instance": 1,
-        "lr": 0.01,
-        "mu": 100.0
-    },
-    {
-        "model": "DCOL",
-        "instance": 2,
-        "lr": 0.001,
-        "mu": 10.0
-    },
-    {
-        "model": "DCOL",
-        "instance": 3,
-        "lr": 0.001,
-        "mu": 10.0
-    },
-    {
-        "model": "IntOpt",
-        "instance": 1,
-        "lr": 0.001,
-        "thr": 1.0,
-        "damping": 0.1
-    },
-    {
-        "model": "IntOpt",
-        "instance": 2,
-        "lr": 0.05,
-        "thr": 0.1,
-        "damping": 10.0
-    },
-    {
-        "model": "IntOpt",
-        "instance": 3,
-        "lr": 0.001,
-        "thr": 0.1,
-        "damping": 0.1
-    },
-    {
         "model": "baseline_mse",
         "instance": 1,
-        "lr": 0.01
+        "lr": 0.01,
+		"max_epochs":30
     },
     {
         "model": "baseline_mse",
         "instance": 2,
-        "lr": 0.01
+        "lr": 0.01,
+		"max_epochs":30
     },
     {
         "model": "baseline_mse",
         "instance": 3,
-        "lr": 0.0005
-    },
-    {
-        "model": "CachingPO",
-        "loss": "MAP_c",
-        "instance": 1,
-        "lr": 0.001
-    },
-    {
-        "model": "CachingPO",
-        "loss": "MAP_c",
-        "instance": 2,
-        "lr": 0.01
-    },
-    {
-        "model": "CachingPO",
-        "loss": "MAP_c",
-        "instance": 3,
-        "lr": 0.005
-    },
-    {
-        "model": "CachingPO",
-        "loss": "pairwise_diff",
-        "instance": 1,
-        "lr": 0.001
-    },
-    {
-        "model": "CachingPO",
-        "loss": "pairwise_diff",
-        "instance": 2,
-        "lr": 0.01
-    },
-    {
-        "model": "CachingPO",
-        "loss": "pairwise_diff",
-        "instance": 3,
-        "lr": 0.005
-    },
-    {
-        "model": "CachingPO",
-        "loss": "pairwise",
-        "instance": 1,
-        "lr": 0.005,
-        "tau": 5
-    },
-    {
-        "model": "CachingPO",
-        "loss": "pairwise",
-        "instance": 2,
         "lr": 0.01,
-        "tau": 50
+		"max_epochs":30
     },
     {
-        "model": "CachingPO",
-        "loss": "pairwise",
+        "model": "DPO",
+        "instance": 1,
+        "lr": 0.0001,
+		"num_samples":5,
+        "sigma": 0.5,
+		"max_epochs": 30
+    },
+    {
+        "model": "DPO",
+        "instance": 2,
+        "lr": 0.0001,
+		"num_samples":5,
+        "sigma": 0.1,
+		"max_epochs": 30
+    },
+    {
+        "model": "DPO",
         "instance": 3,
-        "lr": 0.01,
-        "tau": 50
+        "lr": 0.0001,
+		"num_samples":5,
+        "sigma": 1,
+		"max_epochs": 30
     },
     {
-        "model": "CachingPO",
-        "loss": "listwise",
+        "model": "DPO_sd_norm",
         "instance": 1,
         "lr": 0.001,
-        "tau": 5.0
+		"num_samples":5,
+        "sigma": 0.1,
+		"max_epochs": 30
     },
     {
-        "model": "CachingPO",
-        "loss": "listwise",
+        "model": "DPO_sd_norm",
         "instance": 2,
-        "lr": 0.01,
-        "tau": 5.0
+        "lr": 0.001,
+		"num_samples":5,
+        "sigma": 0.5,
+		"max_epochs": 30
     },
     {
-        "model": "CachingPO",
-        "loss": "listwise",
+        "model": "DPO_sd_norm",
         "instance": 3,
-        "lr": 0.01,
-        "tau": 50.0
+        "lr": 0.0001,
+		"num_samples":5,
+        "sigma": 1,
+		"max_epochs": 30
+    },
+    {
+        "model": "DPO_L2_norm",
+        "instance": 1,
+        "lr": 0.0001,
+		"num_samples":5,
+        "sigma": 1,
+		"max_epochs": 30
+    },
+    {
+        "model": "DPO_L2_norm",
+        "instance": 2,
+        "lr": 0.0001,
+		"num_samples":5,
+        "sigma": 1,
+		"max_epochs": 30
+    },
+    {
+        "model": "DPO_L2_norm",
+        "instance": 3,
+        "lr": 0.0001,
+		"num_samples":5,
+        "sigma": 1,
+		"max_epochs": 30
     },
     {
         "model": "SPO",
         "instance": 1,
-        "lr": 0.001
+        "lr": 0.001,
+        "alpha": 10,
+		"max_epochs": 30
     },
     {
         "model": "SPO",
         "instance": 2,
-        "lr": 0.001
+        "lr": 0.001,
+        "alpha": 10,
+		"max_epochs": 30
     },
     {
         "model": "SPO",
         "instance": 3,
-        "lr": 0.005
+        "lr": 0.01,
+        "alpha": 2,
+		"max_epochs": 30
+    },
+	{
+        "model": "SPO_sd_norm",
+        "instance": 1,
+        "lr": 0.001,
+        "alpha": 10,
+		"max_epochs": 30
+    },
+    {
+        "model": "SPO_sd_norm",
+        "instance": 2,
+        "lr": 0.001,
+        "alpha": 0.5,
+		"max_epochs": 30
+    },
+    {
+        "model": "SPO_sd_norm",
+        "instance": 3,
+        "lr": 0.001,
+        "alpha": 2,
+		"max_epochs": 30
+    },
+	{
+        "model": "SPO_L2_norm",
+        "instance": 1,
+        "lr": 0.001,
+        "alpha": 10,
+		"max_epochs": 30
+    },
+    {
+        "model": "SPO_L2_norm",
+        "instance": 2,
+        "lr": 0.01,
+        "alpha": 0.5,
+		"max_epochs": 30
+    },
+    {
+        "model": "SPO_L2_norm",
+        "instance": 3,
+        "lr": 0.001,
+        "alpha": 0.5,
+		"max_epochs": 30
+    },
+    {
+        "model": "DBB",
+        "instance": 1,
+        "lr": 0.01,
+        "lambda_val": 10,
+		"max_epochs": 30
+    },
+    {
+        "model": "DBB",
+        "instance": 2,
+        "lr": 0.01,
+        "lambda_val": 0.1,
+		"max_epochs": 30
+    },
+    {
+        "model": "DBB",
+        "instance": 3,
+        "lr": 0.01,
+        "lambda_val": 1,
+		"max_epochs": 30
+    },
+    {
+        "model": "DBB_sd_norm",
+        "instance": 1,
+        "lr": 0.01,
+        "lambda_val": 10,
+		"max_epochs": 30
+    },
+    {
+        "model": "DBB_sd_norm",
+        "instance": 2,
+        "lr": 0.01,
+        "lambda_val": 10,
+		"max_epochs": 30
+    },
+    {
+        "model": "DBB_sd_norm",
+        "instance": 3,
+        "lr": 0.001,
+        "lambda_val": 1,
+		"max_epochs": 30
+    },
+    {
+        "model": "DBB_L2_norm",
+        "instance": 1,
+        "lr": 0.01,
+        "lambda_val": 10,
+		"max_epochs": 30
+    },
+    {
+        "model": "DBB_L2_norm",
+        "instance": 2,
+        "lr": 0.01,
+        "lambda_val": 10,
+		"max_epochs": 30
+    },
+    {
+        "model": "DBB_L2_norm",
+        "instance": 3,
+        "lr": 0.01,
+        "lambda_val": 10,
+		"max_epochs": 30
     }
 ]
