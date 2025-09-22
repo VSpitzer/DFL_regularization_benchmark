@@ -148,11 +148,10 @@ def seed_all(seed):
     
 def exec():
 
-    with open('config_DPO_tmp.json', "r") as json_file:
+    with open('config.json', "r") as json_file:
         parameter_sets = json.load(json_file)
         
     cpt=0
-    figurefile = "C:/Users/Victor/Pictures/ADPO/matching/"
     for parameters in parameter_sets:
         
         Args = argparse.Namespace(**parameters)

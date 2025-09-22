@@ -39,42 +39,45 @@
 		"alpha":10
     },
     {
-        "model": "SPO_sd_norm",
+        "model": "SPO_rp",
         "capacity": 60,
         "lr": 1,
 		"max_epochs":30,
+		"kappa":10000,
 		"alpha":2
     },
     {
-        "model": "SPO_sd_norm",
+        "model": "SPO_rp",
         "capacity": 120,
         "lr": 1,
 		"max_epochs":30,
+		"kappa":10000,
 		"alpha":2
     },
     {
-        "model": "SPO_sd_norm",
+        "model": "SPO_rp",
         "capacity": 180,
         "lr": 1,
 		"max_epochs":30,
-		"alpha":2
+		"kappa":10000,
+		"alpha":10
     },
     {
-        "model": "SPO_L2_norm",
+        "model": "SPO_rn",
         "capacity": 60,
         "lr": 0.01,
 		"max_epochs":30,
 		"alpha":2
     },
     {
-        "model": "SPO_L2_norm",
+        "model": "SPO_rn",
         "capacity": 120,
         "lr": 1,
 		"max_epochs":30,
 		"alpha":2
     },
     {
-        "model": "SPO_L2_norm",
+        "model": "SPO_rn",
         "capacity": 180,
         "lr": 0.1,
 		"max_epochs":30,
@@ -85,7 +88,7 @@
         "capacity": 60,
         "lr": 0.01,
 		"max_epochs":30,
-		"sigma":1,
+		"sigma":0.5,
 		"num_samples":5
     },
     {
@@ -93,7 +96,7 @@
         "capacity": 120,
         "lr": 0.01,
 		"max_epochs":30,
-		"sigma":1,
+		"sigma":2,
 		"num_samples":5
     },
     {
@@ -105,31 +108,34 @@
 		"num_samples":5
     },
     {
-        "model": "DPO_sd_norm",
+        "model": "DPO_rp",
         "capacity": 60,
-        "lr": 0.1,
+        "lr": 0.01,
 		"max_epochs":30,
-		"sigma":1,
+		"sigma":0.5,
+		"kappa":100,
 		"num_samples":5
     },
     {
-        "model": "DPO_sd_norm",
+        "model": "DPO_rp",
         "capacity": 120,
         "lr": 0.1,
 		"max_epochs":30,
-		"sigma":1,
+		"sigma":0.5,
+		"kappa":1,
 		"num_samples":5
     },
     {
-        "model": "DPO_sd_norm",
+        "model": "DPO_rp",
         "capacity": 180,
         "lr": 0.1,
 		"max_epochs":30,
 		"sigma":1,
+		"kappa":10000,
 		"num_samples":5
     },
     {
-        "model": "DPO_L2_norm",
+        "model": "DPO_rn",
         "capacity": 60,
         "lr": 0.1,
 		"max_epochs":30,
@@ -137,7 +143,7 @@
 		"num_samples":5
     },
     {
-        "model": "DPO_L2_norm",
+        "model": "DPO_rn",
         "capacity": 120,
         "lr": 0.1,
 		"max_epochs":30,
@@ -145,7 +151,7 @@
 		"num_samples":5
     },
     {
-        "model": "DPO_L2_norm",
+        "model": "DPO_rn",
         "capacity": 180,
         "lr": 0.1,
 		"max_epochs":30,
@@ -155,9 +161,9 @@
     {
         "model": "DBB",
         "capacity": 60,
-        "lr": 0.1,
+        "lr": 1,
 		"max_epochs":30,
-		"lambda_val":0.01
+		"lambda_val":0.1
     },
     {
         "model": "DBB",
@@ -174,42 +180,45 @@
 		"lambda_val":0.1
     },
     {
-        "model": "DBB_sd_norm",
+        "model": "DBB_rp",
         "capacity": 60,
         "lr": 1,
 		"max_epochs":30,
-		"lambda_val":10
+		"kappa":10000,
+		"lambda_val":0.1
     },
     {
-        "model": "DBB_sd_norm",
+        "model": "DBB_rp",
         "capacity": 120,
-        "lr": 0.1,
+        "lr": 1,
 		"max_epochs":30,
-		"lambda_val":10
+		"kappa":10000,
+		"lambda_val":1
     },
     {
-        "model": "DBB_sd_norm",
+        "model": "DBB_rp",
         "capacity": 180,
         "lr": 0.1,
 		"max_epochs":30,
-		"lambda_val":10
+		"kappa":10000,
+		"lambda_val":0.1
     },
     {
-        "model": "DBB_L2_norm",
+        "model": "DBB_rn",
         "capacity": 60,
         "lr": 0.1,
 		"max_epochs":30,
 		"lambda_val":10
     },
     {
-        "model": "DBB_L2_norm",
+        "model": "DBB_rn",
         "capacity": 120,
         "lr": 0.1,
 		"max_epochs":30,
 		"lambda_val":10
     },
     {
-        "model": "DBB_L2_norm",
+        "model": "DBB_rn",
         "capacity": 180,
         "lr": 0.1,
 		"max_epochs":30,

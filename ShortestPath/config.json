@@ -51,131 +51,137 @@
 		"max_epochs":30
     },
     {
-        "model": "SPO_sd_norm",
+        "model": "SPO_rp",
         "N": 1000,
         "noise": 0.5,
         "deg": 1,
         "lr": 1,
-		"alpha":0.5,
+		"alpha":10,
+		"kappa":1,
 		"max_epochs":30
     },
     {
-        "model": "SPO_sd_norm",
+        "model": "SPO_rp",
         "N": 1000,
         "noise": 0.5,
         "deg": 2,
-        "lr": 0.1,
+        "lr": 1,
 		"alpha":2,
+		"kappa":1,
 		"max_epochs":30
     },
     {
-        "model": "SPO_sd_norm",
+        "model": "SPO_rp",
         "N": 1000,
         "noise": 0.5,
         "deg": 6,
-        "lr": 0.1,
-		"alpha":2,
-		"max_epochs":30
-    },
-    {
-        "model": "SPO_L2_norm",
-        "N": 1000,
-        "noise": 0.5,
-        "deg": 1,
-        "lr": 0.1,
-		"alpha":0.5,
-		"max_epochs":30
-    },
-    {
-        "model": "SPO_L2_norm",
-        "N": 1000,
-        "noise": 0.5,
-        "deg": 2,
-        "lr": 0.1,
-		"alpha":0.5,
-		"max_epochs":30
-    },
-    {
-        "model": "SPO_L2_norm",
-        "N": 1000,
-        "noise": 0.5,
-        "deg": 6,
-        "lr": 0.1,
-		"alpha":2,
-		"max_epochs":30
-    },
-    {
-        "model": "DPO",
-        "N": 1000,
-        "noise": 0.5,
-        "deg": 1,
-        "lr": 0.1,
-		"num_sample":5,
-		"sigma":10,
-		"max_epochs":30
-    },
-    {
-        "model": "DPO",
-        "N": 1000,
-        "noise": 0.5,
-        "deg": 2,
-        "lr": 0.1,
-		"num_sample":5,
-		"sigma":10,
-		"max_epochs":30
-    },
-    {
-        "model": "DPO",
-        "N": 1000,
-        "noise": 0.5,
-        "deg": 6,
-        "lr": 0.1,
-		"num_sample":5,
-		"sigma":10,
-		"max_epochs":30
-    },
-    {
-        "model": "DPO_sd_norm",
-        "N": 1000,
-        "noise": 0.5,
-        "deg": 1,
         "lr": 0.01,
+		"alpha":0.5,
+		"kappa":1,
+		"max_epochs":30
+    },
+    {
+        "model": "SPO_rn",
+        "N": 1000,
+        "noise": 0.5,
+        "deg": 1,
+        "lr": 0.1,
+		"alpha":0.5,
+		"max_epochs":30
+    },
+    {
+        "model": "SPO_rn",
+        "N": 1000,
+        "noise": 0.5,
+        "deg": 2,
+        "lr": 0.1,
+		"alpha":0.5,
+		"max_epochs":30
+    },
+    {
+        "model": "SPO_rn",
+        "N": 1000,
+        "noise": 0.5,
+        "deg": 6,
+        "lr": 0.1,
+		"alpha":2,
+		"max_epochs":30
+    },
+    {
+        "model": "DPO",
+        "N": 1000,
+        "noise": 0.5,
+        "deg": 1,
+        "lr": 0.1,
+		"num_sample":5,
+		"sigma":10,
+		"max_epochs":30
+    },
+    {
+        "model": "DPO",
+        "N": 1000,
+        "noise": 0.5,
+        "deg": 2,
+        "lr": 0.1,
+		"num_sample":5,
+		"sigma":10,
+		"max_epochs":30
+    },
+    {
+        "model": "DPO",
+        "N": 1000,
+        "noise": 0.5,
+        "deg": 6,
+        "lr": 0.1,
+		"num_sample":5,
+		"sigma":10,
+		"max_epochs":30
+    },
+    {
+        "model": "DPO_rp",
+        "N": 1000,
+        "noise": 0.5,
+        "deg": 1,
+        "lr": 1,
+		"num_sample":5,
+		"sigma":1,
+		"kappa":1,
+		"max_epochs":30
+    },
+    {
+        "model": "DPO_rp",
+        "N": 1000,
+        "noise": 0.5,
+        "deg": 2,
+        "lr": 1,
+		"num_sample":5,
+		"sigma":1,
+		"kappa":1,
+		"max_epochs":30
+    },
+    {
+        "model": "DPO_rp",
+        "N": 1000,
+        "noise": 0.5,
+        "deg": 6,
+        "lr": 1,
 		"num_sample":5,
 		"sigma":0.1,
+		"kappa":1,
 		"max_epochs":30
     },
     {
-        "model": "DPO_sd_norm",
+        "model": "DPO_rn",
         "N": 1000,
         "noise": 0.5,
-        "deg": 2,
+        "deg": 1,
         "lr": 0.01,
 		"num_sample":5,
 		"sigma":1,
 		"max_epochs":30
     },
     {
-        "model": "DPO_sd_norm",
-        "N": 1000,
-        "noise": 0.5,
-        "deg": 6,
-        "lr": 0.01,
-		"num_sample":5,
-		"sigma":0.1,
-		"max_epochs":30
-    },
-    {
-        "model": "DPO_L2_norm",
-        "N": 1000,
-        "noise": 0.5,
-        "deg": 1,
-        "lr": 0.01,
-		"num_sample":5,
-		"sigma":1,
-		"max_epochs":30
-    },
-    {
-        "model": "DPO_L2_norm",
+        "model": "DPO_rn",
         "N": 1000,
         "noise": 0.5,
         "deg": 2,
@@ -185,7 +191,7 @@
 		"max_epochs":30
     },
     {
-        "model": "DPO_L2_norm",
+        "model": "DPO_rn",
         "N": 1000,
         "noise": 0.5,
         "deg": 6,
@@ -200,56 +206,59 @@
         "noise": 0.5,
         "deg": 1,
         "lr": 0.01,
-		"lambda":10,
-		"max_epochs":30
-    },
-    {
-        "model": "DBB",
-        "N": 1000,
-        "noise": 0.5,
-        "deg": 2,
-        "lr": 0.1,
-		"lambda":10,
-		"max_epochs":30
-    },
-    {
-        "model": "DBB",
-        "N": 1000,
-        "noise": 0.5,
-        "deg": 6,
-        "lr": 1,
-		"lambda":10,
-		"max_epochs":30
-    },
-    {
-        "model": "DBB_sd_norm",
-        "N": 1000,
-        "noise": 0.5,
-        "deg": 1,
-        "lr": 1,
 		"lambda":1,
 		"max_epochs":30
     },
     {
-        "model": "DBB_sd_norm",
+        "model": "DBB",
         "N": 1000,
         "noise": 0.5,
         "deg": 2,
-        "lr": 1,
-		"lambda":10,
+        "lr": 0.1,
+		"lambda":1,
 		"max_epochs":30
     },
     {
-        "model": "DBB_sd_norm",
+        "model": "DBB",
         "N": 1000,
         "noise": 0.5,
         "deg": 6,
-        "lr": 0.01,
+        "lr": 1,
 		"lambda":0.1,
 		"max_epochs":30
     },
     {
-        "model": "DBB_L2_norm",
+        "model": "DBB_rp",
+        "N": 1000,
+        "noise": 0.5,
+        "deg": 0.01,
+        "lr": 1,
+		"lambda":0.1,
+		"kappa":10000,
+		"max_epochs":30
+    },
+    {
+        "model": "DBB_rp",
+        "N": 1000,
+        "noise": 0.5,
+        "deg": 2,
+        "lr": 1,
+		"lambda":0.01,
+		"kappa":100,
+		"max_epochs":30
+    },
+    {
+        "model": "DBB_rp",
+        "N": 1000,
+        "noise": 0.5,
+        "deg": 6,
+        "lr": 1,
+		"lambda":0.1,
+		"kappa":10000,
+		"max_epochs":30
+    },
+    {
+        "model": "DBB_rn",
         "N": 1000,
         "noise": 0.5,
         "deg": 1,
@@ -258,7 +267,7 @@
 		"max_epochs":30
     },
     {
-        "model": "DBB_L2_norm",
+        "model": "DBB_rn",
         "N": 1000,
         "noise": 0.5,
         "deg": 2,
@@ -267,7 +276,7 @@
 		"max_epochs":30
     },
     {
-        "model": "DBB_L2_norm",
+        "model": "DBB_rn",
         "N": 1000,
         "noise": 0.5,
         "deg": 6,

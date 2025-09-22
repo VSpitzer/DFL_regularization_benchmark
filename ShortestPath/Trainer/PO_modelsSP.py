@@ -188,41 +188,8 @@ class SPO(baseline):
         self.log("train_loss",loss/len(y),  on_step=True, on_epoch=True, )
         return training_loss  
 
-class SPO_sd_norm(baseline):
-    def __init__(self,net,exact_solver = spsolver,lr=1e-1,  alpha=2., l1_weight=1e-5,max_epochs=30, seed=20, scheduler=False, **kwd):
-        """
-        Implementaion of SPO+ loss subclass of twostage model
-            loss_fn: loss function 
 
- 
-        """
-        super().__init__(net,exact_solver, lr, l1_weight,max_epochs, seed, scheduler)
-        self.loss_fn =  SPOnormLayer(self.exact_solver, alpha=alpha)
-
-    def training_step(self, batch, batch_idx):
-        x,y, sol = batch
-        y_hat =  self(x).squeeze()
-        
-        normalized_y_hat = torch.zeros(y_hat.shape)
-        for i in range(len(y_hat)):
-            normalized_y_hat[i] = y_hat[i]*1./torch.sqrt(torch.var(y_hat[i]))
-        
-        normalized_y = torch.zeros(y.shape)
-        for i in range(len(y)):
-            normalized_y[i] = y[i]*1./torch.sqrt(torch.var(y[i])) 
-        
-        loss = 0
-        l1penalty = sum([(param.abs()).sum() for param in self.net.parameters()])
-        # for ii in range(len(y)):
-        #     loss += self.loss_fn(y_hat[ii],y[ii], sol[ii])
-        training_loss = self.loss_fn(normalized_y_hat, normalized_y, sol)/len(y) + l1penalty * self.l1_weight
-        # training_loss=  loss/len(y)  + l1penalty * self.l1_weight
-        self.log("train_totalloss",training_loss, prog_bar=True, on_step=True, on_epoch=True, )
-        self.log("train_l1penalty",l1penalty * self.l1_weight,  on_step=True, on_epoch=True, )
-        self.log("train_loss",loss/len(y),  on_step=True, on_epoch=True, )
-        return training_loss  
-
-class SPO_L2_norm(baseline):
+class SPO_rn(baseline):
     def __init__(self,net,exact_solver = spsolver,lr=1e-1,  alpha=2., l1_weight=1e-5,max_epochs=30, seed=20, scheduler=False, **kwd):
         """
         Implementaion of SPO+ loss subclass of twostage model
@@ -255,6 +222,35 @@ class SPO_L2_norm(baseline):
         self.log("train_l1penalty",l1penalty * self.l1_weight,  on_step=True, on_epoch=True, )
         self.log("train_loss",loss/len(y),  on_step=True, on_epoch=True, )
         return training_loss  
+
+class SPO_rp(baseline):
+    def __init__(self,net,exact_solver = spsolver,lr=1e-1,  alpha=2., kappa=1, l1_weight=1e-5,max_epochs=30, seed=20, scheduler=False, **kwd):
+        """
+        Implementaion of SPO+ loss subclass of twostage model
+            loss_fn: loss function 
+
+ 
+        """
+        super().__init__(net,exact_solver, lr, l1_weight,max_epochs, seed, scheduler)
+        self.loss_fn =  SPOnormLayer(self.exact_solver, alpha=alpha)
+        self.kappa=kappa
+
+    def training_step(self, batch, batch_idx):
+        x,y, sol = batch
+        y_hat =  self(x).squeeze()
+        
+        normalized_y_hat = torch.zeros(y_hat.shape)
+        for i in range(len(y_hat)):
+            normalized_y_hat[i] = y_hat[i]*1./(1+torch.linalg.norm(y_hat[i])*1./self.kappa)   
+        
+        loss = 0
+        l1penalty = sum([(param.abs()).sum() for param in self.net.parameters()])
+        training_loss = self.loss_fn(normalized_y_hat, y, sol)/len(y) + l1penalty * self.l1_weight
+        self.log("train_totalloss",training_loss, prog_bar=True, on_step=True, on_epoch=True, )
+        self.log("train_l1penalty",l1penalty * self.l1_weight,  on_step=True, on_epoch=True, )
+        self.log("train_loss",loss/len(y),  on_step=True, on_epoch=True, )
+        return training_loss  
+
 
 class DBB(baseline):
     """
@@ -293,38 +289,9 @@ class DBB(baseline):
         self.log("train_l1penalty",l1penalty * self.l1_weight,  on_step=True, on_epoch=True, )
         self.log("train_loss", ((sol_hat - sol)*y).sum(-1).mean(),  on_step=True, on_epoch=True, )
         return training_loss   
+                
         
-class DBB_sd_norm(baseline):
-    def __init__(self,net,exact_solver = spsolver,lr=1e-1,lambda_val =0.1, l1_weight=1e-5,max_epochs=30, seed=20, scheduler=False, **kwd):
-        super().__init__(net,exact_solver, lr, l1_weight,max_epochs, seed, scheduler)
-        self.lambda_val = lambda_val
-        self.layer = DBBlayer(self.exact_solver,self.lambda_val)
-        self.save_hyperparameters("lr","lambda_val") 
-    def training_step(self, batch, batch_idx):
-        x,y, sol = batch
-        y_hat =  self(x).squeeze()
-        
-        normalized_y_hat = torch.zeros(y_hat.shape)
-        for i in range(len(y_hat)):
-            normalized_y_hat[i] = y_hat[i]*1./torch.sqrt(torch.var(y_hat[i])) 
-
-        normalized_y = torch.zeros(y.shape)
-        for i in range(len(y_hat)):
-            normalized_y[i] = y[i]*1./torch.sqrt(torch.var(y[i])) 
-        
-        sol_hat = self.layer(normalized_y_hat, normalized_y, sol ) 
-        
-        l1penalty = sum([(param.abs()).sum() for param in self.net.parameters()])
-
-        training_loss =  ((sol_hat - sol)*normalized_y).sum(-1).mean() + l1penalty * self.l1_weight
-
-        self.log("train_totalloss",training_loss, prog_bar=True, on_step=True, on_epoch=True, )
-        self.log("train_l1penalty",l1penalty * self.l1_weight,  on_step=True, on_epoch=True, )
-        self.log("train_loss", ((sol_hat - sol)*normalized_y).sum(-1).mean(),  on_step=True, on_epoch=True, )
-        return training_loss 
-        
-        
-class DBB_L2_norm(baseline):
+class DBB_rn(baseline):
     def __init__(self,net,exact_solver = spsolver,lr=1e-1,lambda_val =0.1, l1_weight=1e-5,max_epochs=30, seed=20, scheduler=False, **kwd):
         super().__init__(net,exact_solver, lr, l1_weight,max_epochs, seed, scheduler)
         self.lambda_val = lambda_val
@@ -353,6 +320,31 @@ class DBB_L2_norm(baseline):
         self.log("train_loss", ((sol_hat - sol)*normalized_y).sum(-1).mean(),  on_step=True, on_epoch=True, )
         return training_loss 
         
+class DBB_rp(baseline):
+    def __init__(self,net,exact_solver = spsolver,lr=1e-1,lambda_val =0.1, kappa=1, l1_weight=1e-5,max_epochs=30, seed=20, scheduler=False, **kwd):
+        super().__init__(net,exact_solver, lr, l1_weight,max_epochs, seed, scheduler)
+        self.lambda_val = lambda_val
+        self.layer = DBBlayer(self.exact_solver,self.lambda_val)
+        self.save_hyperparameters("lr","lambda_val")
+        self.kappa = kappa
+    def training_step(self, batch, batch_idx):
+        x,y, sol = batch
+        y_hat =  self(x).squeeze()
+        
+        normalized_y_hat = torch.zeros(y_hat.shape)
+        for i in range(len(y_hat)):
+            normalized_y_hat[i] = y_hat[i]*1./(1+torch.linalg.norm(y_hat[i])*1./self.kappa)   
+        
+        sol_hat = self.layer(normalized_y_hat, y, sol ) 
+        
+        l1penalty = sum([(param.abs()).sum() for param in self.net.parameters()])
+
+        training_loss =  ((sol_hat - sol)*y).sum(-1).mean() + l1penalty * self.l1_weight
+
+        self.log("train_totalloss",training_loss, prog_bar=True, on_step=True, on_epoch=True, )
+        self.log("train_l1penalty",l1penalty * self.l1_weight,  on_step=True, on_epoch=True, )
+        self.log("train_loss", ((sol_hat - sol)*y).sum(-1).mean(),  on_step=True, on_epoch=True, )
+        return training_loss 
 
 class DPO(baseline):
     '''
@@ -395,37 +387,8 @@ class DPO(baseline):
         self.log("train_loss",loss,  on_step=True, on_epoch=True, )
         return training_loss
 
-
-class DPO_sd_norm(baseline):
-    def __init__(self,net,solver=spsolver,exact_solver = spsolver,num_samples=10, sigma=0.1, lr=1e-1,l1_weight=1e-5, max_epochs= 30, seed=20, scheduler=False, **kwd):
-        super().__init__(net,exact_solver , lr, l1_weight, max_epochs, seed, scheduler)
-        self.solver = solver
-        @perturbations.perturbed(num_samples= num_samples, sigma= sigma, noise='gumbel',batched = True)
-        def dpo_layer(y):
-            return spsolver.solution_fromtorch(y)
-        self.dpo_layer = dpo_layer
-
-
-        self.save_hyperparameters("lr")
-    def training_step(self, batch, batch_idx):
-        x,y, sol = batch
-        y_hat =  self(x).squeeze()
-        l1penalty = sum([(param.abs()).sum() for param in self.net.parameters()])
-
         
-        normalized_y_hat = torch.zeros(y_hat.shape)
-        for i in range(len(y_hat)):
-            normalized_y_hat[i] = y_hat[i]*1./torch.sqrt(torch.var(y_hat[i]))
-        sol_hat = self.dpo_layer(normalized_y_hat) 
-
-        loss = ((sol_hat - sol)*y).sum(-1).mean()
-        training_loss= loss  + l1penalty * self.l1_weight        
-        self.log("train_totalloss",training_loss, prog_bar=True, on_step=True, on_epoch=True, )
-        self.log("train_l1penalty",l1penalty * self.l1_weight,  on_step=True, on_epoch=True, )
-        self.log("train_loss",loss,  on_step=True, on_epoch=True, )
-        return training_loss
-        
-class DPO_L2_norm(baseline):
+class DPO_rn(baseline):
     def __init__(self,net,solver=spsolver,exact_solver = spsolver,num_samples=10, sigma=0.1, lr=1e-1,l1_weight=1e-5, max_epochs= 30, seed=20, scheduler=False, **kwd):
         super().__init__(net,exact_solver , lr, l1_weight, max_epochs, seed, scheduler)
         self.solver = solver
@@ -445,6 +408,35 @@ class DPO_L2_norm(baseline):
         normalized_y_hat = torch.zeros(y_hat.shape)
         for i in range(len(y_hat)):
             normalized_y_hat[i] = y_hat[i]*1./torch.linalg.norm(y_hat[i])
+        sol_hat = self.dpo_layer(normalized_y_hat) 
+
+        loss = ((sol_hat - sol)*y).sum(-1).mean()
+        training_loss= loss  + l1penalty * self.l1_weight        
+        self.log("train_totalloss",training_loss, prog_bar=True, on_step=True, on_epoch=True, )
+        self.log("train_l1penalty",l1penalty * self.l1_weight,  on_step=True, on_epoch=True, )
+        self.log("train_loss",loss,  on_step=True, on_epoch=True, )
+        return training_loss
+
+class DPO_rp(baseline):
+    def __init__(self,net,solver=spsolver,exact_solver = spsolver,num_samples=10, sigma=0.1, kappa=1, lr=1e-1,l1_weight=1e-5, max_epochs= 30, seed=20, scheduler=False, **kwd):
+        super().__init__(net,exact_solver , lr, l1_weight, max_epochs, seed, scheduler)
+        self.solver = solver
+        @perturbations.perturbed(num_samples= num_samples, sigma= sigma, noise='gumbel',batched = True)
+        def dpo_layer(y):
+            return spsolver.solution_fromtorch(y)
+        self.dpo_layer = dpo_layer
+        self.kappa = kappa
+
+        self.save_hyperparameters("lr")
+    def training_step(self, batch, batch_idx):
+        x,y, sol = batch
+        y_hat =  self(x).squeeze()
+        l1penalty = sum([(param.abs()).sum() for param in self.net.parameters()])
+
+        
+        normalized_y_hat = torch.zeros(y_hat.shape)
+        for i in range(len(y_hat)):
+            normalized_y_hat[i] = y_hat[i]*1./(1+torch.linalg.norm(y_hat[i])*1./self.kappa)   
         sol_hat = self.dpo_layer(normalized_y_hat) 
 
         loss = ((sol_hat - sol)*y).sum(-1).mean()

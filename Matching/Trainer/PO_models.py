@@ -153,28 +153,8 @@ class SPO(baseline_mse):
         self.log("train_loss",loss, prog_bar=True, on_step=True, on_epoch=True, )
         return loss
 
-class SPO_sd_norm(baseline_mse):
-    def __init__(self,solver, lr=1e-1, alpha=2, mode='sigmoid',n_layers=2,seed=0,scheduler=False, **kwd):
-        super().__init__(solver,lr,mode,n_layers,seed, scheduler)
-        self.layer = SPOlayer(solver, alpha=alpha)
-        # self.automatic_optimization = False
-    def training_step(self, batch, batch_idx):
-        x,y,sol,m = batch
-        y_hat =  self(x).squeeze()
         
-        normalized_y_hat = torch.zeros(y_hat.shape)
-        for i in range(len(y_hat)):
-            normalized_y_hat[i] = y_hat[i]*1./torch.sqrt(torch.var(y_hat[i]))
-        
-        normalized_y = torch.zeros(y.shape)
-        for i in range(len(y)):
-            normalized_y[i] = y[i]*1./torch.sqrt(torch.var(y[i])) 
-        
-        loss =  self.layer(normalized_y_hat, normalized_y,sol,m ) 
-        self.log("train_loss",loss, prog_bar=True, on_step=True, on_epoch=True, )
-        return loss
-        
-class SPO_L2_norm(baseline_mse):
+class SPO_rn(baseline_mse):
     def __init__(self,solver, lr=1e-1, alpha=2, mode='sigmoid',n_layers=2,seed=0,scheduler=False, **kwd):
         super().__init__(solver,lr,mode,n_layers,seed, scheduler)
         self.layer = SPOlayer(solver, alpha=alpha)
@@ -195,6 +175,24 @@ class SPO_L2_norm(baseline_mse):
         self.log("train_loss",loss, prog_bar=True, on_step=True, on_epoch=True, )
         return loss
 
+class SPO_rp(baseline_mse):
+    def __init__(self,solver, lr=1e-1, alpha=2, kappa=1, mode='sigmoid',n_layers=2,seed=0,scheduler=False, **kwd):
+        super().__init__(solver,lr,mode,n_layers,seed, scheduler)
+        self.kappa=kappa
+        self.layer = SPOlayer(solver, alpha=alpha)
+        # self.automatic_optimization = False
+    def training_step(self, batch, batch_idx):
+        x,y,sol,m = batch
+        y_hat =  self(x).squeeze()
+        
+        normalized_y_hat = torch.zeros(y_hat.shape)
+        for i in range(len(y_hat)):
+            normalized_y_hat[i] = y_hat[i]*1./(1+torch.linalg.norm(y_hat[i])*1./self.kappa)    
+        
+        loss =  self.layer(normalized_y_hat, y,sol,m ) 
+        self.log("train_loss",loss, prog_bar=True, on_step=True, on_epoch=True, )
+        return loss
+
 class DBB(baseline_mse):
     def __init__(self, solver,lr=1e-1,lambda_val=0.1,mode='sigmoid',n_layers=2, seed=0,scheduler=False, **kwd):
         super().__init__(solver,lr,mode,n_layers,seed, scheduler)
@@ -208,32 +206,7 @@ class DBB(baseline_mse):
         return loss
         
         
-class DBB_sd_norm(baseline_mse):
-    def __init__(self, solver,lr=1e-1,lambda_val=0.1,mode='sigmoid',n_layers=2, seed=0,scheduler=False, **kwd):
-        super().__init__(solver,lr,mode,n_layers,seed, scheduler)
-        self.layer = DBBlayer(solver,lambda_val=lambda_val)
-    
-
-    def training_step(self, batch, batch_idx):
-        x,y,sol,m = batch
-        
-        y_hat =  self(x).squeeze()
-
-        normalized_y_hat = torch.zeros(y_hat.shape)
-        for i in range(len(y_hat)):
-            normalized_y_hat[i] = y_hat[i]*1./(torch.sqrt(torch.var(y_hat[i])))   
-
-        normalized_y = torch.zeros(y.shape)
-        for i in range(len(y_hat)):
-            normalized_y[i] = y[i]*1./(torch.sqrt(torch.var(y[i])))
-        
-        sol_hat = self.layer(normalized_y_hat, normalized_y,sol,m ) 
-        
-        loss = ((sol - sol_hat)*normalized_y).sum(-1).mean()
-        self.log("train_loss",loss, prog_bar=True, on_step=True, on_epoch=True, )
-        return loss
-        
-class DBB_L2_norm(baseline_mse):
+class DBB_rn(baseline_mse):
     def __init__(self, solver,lr=1e-1,lambda_val=0.1,mode='sigmoid',n_layers=2, seed=0,scheduler=False, **kwd):
         super().__init__(solver,lr,mode,n_layers,seed, scheduler)
         self.layer = DBBlayer(solver,lambda_val=lambda_val)
@@ -258,7 +231,29 @@ class DBB_L2_norm(baseline_mse):
         self.log("train_loss",loss, prog_bar=True, on_step=True, on_epoch=True, )
         return loss
         
+        
+class DBB_rp(baseline_mse):
+    def __init__(self, solver,lr=1e-1,lambda_val=0.1, kappa=1, mode='sigmoid',n_layers=2, seed=0,scheduler=False, **kwd):
+        super().__init__(solver,lr,mode,n_layers,seed, scheduler)
+        self.kappa=kappa
+        self.layer = DBBlayer(solver,lambda_val=lambda_val)
+    
 
+    def training_step(self, batch, batch_idx):
+        x,y,sol,m = batch
+        
+        y_hat =  self(x).squeeze()
+
+        normalized_y_hat = torch.zeros(y_hat.shape)
+        for i in range(len(y_hat)):
+            normalized_y_hat[i] = y_hat[i]*1./(1+torch.linalg.norm(y_hat[i])*1./self.kappa)    
+        
+        sol_hat = self.layer(normalized_y_hat, y,sol,m ) 
+        
+        loss = ((sol - sol_hat)*y).sum(-1).mean()
+        self.log("train_loss",loss, prog_bar=True, on_step=True, on_epoch=True, )
+        return loss
+        
 
 
 class DPO(baseline_mse):
@@ -286,34 +281,8 @@ class DPO(baseline_mse):
         self.log("train_loss",loss, prog_bar=True, on_step=True, on_epoch=True, )
         return loss
 
-class DPO_sd_norm(baseline_mse):
-    def __init__(self,solver,sigma=0.1,alpha=1,num_samples=10, 
-        lr=1e-1,mode='sigmoid',n_layers=2, seed=0,scheduler=False, **kwd):
-        self.sigma = sigma
-        self.alpha = alpha
-        self.num_samples = num_samples
-        super().__init__(solver,lr,mode,n_layers,seed, scheduler)
-    def training_step(self, batch, batch_idx):
-        x,y,sol,m = batch
-        y_hat =  self(x).squeeze()
-        loss = 0
-        normalized_y_hat = torch.zeros(y_hat.shape)
-        for i in range(len(y_hat)):
-            def solver(y_):
-                sol = []
-                ### FY extend the size of y to num_sample*batch
-                for j in range(len(y_)):
-                     sol.append(  batch_solve(self.solver,y_[j],m[i],batched=False).unsqueeze(0) )
-                
-                return torch.cat(sol).float()
-            normalized_y_hat[i] = y_hat[i]*1./(1e-5+torch.sqrt(torch.var(y_hat[i])))
-            op = perturbations.perturbed(solver, num_samples= self.num_samples, sigma= self.sigma, noise='normal', batched= False)( normalized_y_hat[i] )
-            loss += y[i].dot(sol[i] - op)
-        loss /= len(y_hat)
-        self.log("train_loss",loss, prog_bar=True, on_step=True, on_epoch=True, )
-        return loss
 
-class DPO_L2_norm(baseline_mse):
+class DPO_rn(baseline_mse):
     def __init__(self,solver,sigma=0.1,alpha=1,num_samples=10, 
         lr=1e-1,mode='sigmoid',n_layers=2, seed=0,scheduler=False, **kwd):
         self.sigma = sigma
@@ -340,6 +309,32 @@ class DPO_L2_norm(baseline_mse):
         self.log("train_loss",loss, prog_bar=True, on_step=True, on_epoch=True, )
         return loss
         
-
+class DPO_rp(baseline_mse):
+    def __init__(self,solver,sigma=0.1,alpha=1,kappa=1,num_samples=10, 
+        lr=1e-1,mode='sigmoid',n_layers=2, seed=0,scheduler=False, **kwd):
+        self.kappa = kappa
+        self.sigma = sigma
+        self.alpha = alpha
+        self.num_samples = num_samples
+        super().__init__(solver,lr,mode,n_layers,seed, scheduler)
+    def training_step(self, batch, batch_idx):
+        x,y,sol,m = batch
+        y_hat =  self(x).squeeze()
+        loss = 0
+        normalized_y_hat = torch.zeros(y_hat.shape)
+        for i in range(len(y_hat)):
+            def solver(y_):
+                sol = []
+                ### FY extend the size of y to num_sample*batch
+                for j in range(len(y_)):
+                     sol.append(  batch_solve(self.solver,y_[j],m[i],batched=False).unsqueeze(0) )
+                
+                return torch.cat(sol).float()
+            normalized_y_hat[i] = y_hat[i]*1./(1+torch.linalg.norm(y_hat[i])*1./self.kappa)    
+            op = perturbations.perturbed(solver, num_samples= self.num_samples, sigma= self.sigma, noise='normal', batched= False)( normalized_y_hat[i] )
+            loss += y[i].dot(sol[i] - op)
+        loss /= len(y_hat)
+        self.log("train_loss",loss, prog_bar=True, on_step=True, on_epoch=True, )
+        return loss
 
 
