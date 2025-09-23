@@ -75,7 +75,7 @@
         "N": 1000,
         "noise": 0.5,
         "deg": 6,
-        "lr": 0.01,
+        "lr": 0.1,
 		"alpha":0.5,
 		"kappa":1,
 		"max_epochs":30
