@@ -44,6 +44,7 @@ parser.add_argument("--deg", type=int, help="degree of misspecifaction", default
 parser.add_argument("--model", type=str, help="name of the model", default= "", required= False)
 parser.add_argument("--loss", type= str, help="loss", default= "", required=False)
 parser.add_argument("--net", type=str, help="Type of Model Archietcture, one of: nonorm, batchnorm,l1norm", default= "nonorm", required= False)
+parser.add_argument("--config", type=str, help="Path to the JSON file listing the runs to execute: 'config.json' (default) runs the best/tuned hyperparameters per model and degree; 'config_grid.json' runs the full hyperparameter grid searched in the paper", default="config.json", required=False)
 # Training parameters
 parser.add_argument("--lr", type=float, help="learning rate", default= 1e-3, required=False)
 parser.add_argument("--batch_size", type=int, help="batch size", default= 128, required=False)
@@ -108,8 +109,10 @@ def seed_all(seed):
     
 def exec():
 
-    # Load parameter sets from JSON filw
-    with open('config.json', "r") as json_file:
+    # Load parameter sets from JSON file: 'config.json' (best/tuned hyperparameters)
+    # or 'config_grid.json' (full hyperparameter grid searched in the paper), selected via --config
+    config_args, _ = parser.parse_known_args()
+    with open(config_args.config, "r") as json_file:
         parameter_sets = json.load(json_file)
 
     for parameters in parameter_sets:

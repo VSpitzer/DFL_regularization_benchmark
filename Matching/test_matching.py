@@ -76,6 +76,7 @@ parser = argparse.ArgumentParser(description="Testing framework for Decision-Foc
 parser.add_argument("--model", type=str, help="Name of the DFL model to evaluate (e.g., 'SPO', 'DBB', 'DPO')", default="", required=False)
 parser.add_argument("--instance", type=str, help="Instance type with diversity parameters (1, 2, or 3)", default="1", required=False)
 parser.add_argument("--loss", type=str, help="Loss function for training", default="", required=False)
+parser.add_argument("--config", type=str, help="Path to the JSON file listing the runs to execute: 'config.json' (default) runs the best/tuned hyperparameters per model and instance; 'config_grid.json' runs the full hyperparameter grid searched in the paper", default="config.json", required=False)
 
 # Training parameters
 parser.add_argument("--lr", type=float, help="Learning rate", default=1e-3, required=False)
@@ -148,9 +149,10 @@ def seed_all(seed):
     
 def exec():
 
-    with open('config.json', "r") as json_file:
+    config_args, _ = parser.parse_known_args()
+    with open(config_args.config, "r") as json_file:
         parameter_sets = json.load(json_file)
-        
+
     cpt=0
     for parameters in parameter_sets:
         

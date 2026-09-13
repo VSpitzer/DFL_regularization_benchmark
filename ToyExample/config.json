@@ -32,5 +32,5 @@
 		"sigma":0.5,
 		"kappa":1,
 		"num_samples":5
-    },
+    }
 ]
