@@ -1,29 +1,32 @@
 """
-Testing Framework for Decision-Focused Learning on Bipartite Matching Problems
+Testing Framework for Decision-Focused Learning on the Instability Problem
 
-This script implements the experimental evaluation framework from the JAIR paper:
-"Decision-focused learning: Foundations, state of the art, benchmark and future opportunities"
-
-The framework evaluates different DFL approaches on diverse bipartite matching tasks with:
-1. Various model architectures and loss functions
-2. Multiple DFL methods (SPO, DBB, DPO, etc.)
-3. Configurable diversity parameters (p, q)
-4. Reproducible experiments through seed control
+This script evaluates Decision-Focused Learning (DFL) methods on a small
+synthetic "instability" problem: a 2D linear objective is maximized over the
+vertices of a triangle whose shape is controlled by a scale parameter b. As b
+grows, the problem becomes increasingly ill-conditioned/unstable, which makes
+it a useful stress test for DFL methods and their cost-regularized variants.
 
 Configuration:
-    Model parameters are loaded from 'config.json', enabling systematic evaluation
-    of different approaches and hyperparameters.
+    Model parameters are loaded from a JSON file (see --config), enabling
+    systematic evaluation of different approaches and hyperparameters.
 
 Arguments:
     Problem Configuration:
-    --instance (str): Instance type with diversity parameters, options:
-                     1: {'p':0.1, 'q':0.1}
-                     2: {'p':0.25, 'q':0.25}
-                     3: {'p':0.5, 'q':0.5}
+    --instance (str): Problem class, controlling the scale parameter b, options:
+                     1: b = 1       (b = 10**(instance-1))
+                     2: b = 25      (explicit override -- see
+                                     Trainer/instability_problem.py's
+                                     INSTANCE_B_OVERRIDES)
+                     3: b = 100     (b = 10**(instance-1))
 
     Model Configuration:
     --model (str): DFL model to evaluate (e.g., 'SPO', 'DBB', 'DPO')
     --loss (str): Loss function for training
+    --config (str): Path to the JSON file listing the runs to execute:
+                     'config.json' (default) runs the best/tuned
+                     hyperparameters per model and instance; 'config_grid.json'
+                     runs the full hyperparameter grid searched in the paper
 
     Training Parameters:
     --lr (float): Learning rate (default: 1e-3)
@@ -52,8 +55,8 @@ import shutil
 import random
 from Trainer.PO_models import *
 from pytorch_lightning.callbacks import ModelCheckpoint
-from Trainer.data_utils import DataModule 
-from Trainer.TE import ToyExample
+from Trainer.data_utils import DataModule
+from Trainer.instability_problem import InstabilityProblem
 from distutils.util import strtobool
 import json
 
@@ -64,19 +67,13 @@ import matplotlib.pyplot as plt
 import time
 import sys
 
-# Define diversity parameter sets for different instances
-params_dict = { 
-    1: {'p': 0.1, 'q': 0.1}, 
-    2: {'p': 0.25, 'q': 0.25},
-    3: {'p': 0.5, 'q': 0.5}  
-}
-
-parser = argparse.ArgumentParser(description="Testing framework for Decision-Focused Learning on diverse matching problems")
+parser = argparse.ArgumentParser(description="Testing framework for Decision-Focused Learning on the instability problem")
 
 # Problem configuration
 parser.add_argument("--model", type=str, help="Name of the DFL model to evaluate (e.g., 'SPO', 'DBB', 'DPO')", default="", required=False)
-parser.add_argument("--instance", type=str, help="Instance type with diversity parameters (1, 2, or 3)", default="1", required=False)
+parser.add_argument("--instance", type=str, help="Problem class: 1 and 3 give scale b = 10**(instance-1) = 1/100; 2 gives b = 25 (see INSTANCE_B_OVERRIDES in Trainer/instability_problem.py)", default="1", required=False)
 parser.add_argument("--loss", type=str, help="Loss function for training", default="", required=False)
+parser.add_argument("--config", type=str, help="Path to the JSON file listing the runs to execute: 'config.json' (default) runs the best/tuned hyperparameters per model and instance; 'config_grid.json' runs the full hyperparameter grid searched in the paper", default="config.json", required=False)
 
 # Training parameters
 parser.add_argument("--lr", type=float, help="Learning rate", default=1e-3, required=False)
@@ -114,8 +111,8 @@ class MetricTracker(Callback):
 
 
     def on_train_batch_end(self, trainer, module, outputs, batch, batch_idx):
-        return 
-        
+        return
+
     def on_train_epoch_end(self, trainer, pl_module):
         elogs = trainer.logged_metrics
         self.collection.append(copy.deepcopy(elogs))
@@ -125,18 +122,18 @@ class MetricTracker(Callback):
         # return
 
     # def on_validation_epoch_end(self, trainer, module):
-        # elogs = trainer.logged_metrics  
+        # elogs = trainer.logged_metrics
         # self.collection.append(copy.deepcopy(elogs))
-        # return 
-    
+        # return
+
     # def on_test_batch_end(self, trainer, module, outputs, batch, batch_idx, idk):
         # return
 
-    
+
     # def on_test_epoch_end(self, trainer, module):
-        # elogs = trainer.logged_metrics 
+        # elogs = trainer.logged_metrics
         # self.collection_test.append(copy.deepcopy(elogs))
-        # return 
+        # return
 
 class _Sentinel:
     pass
@@ -149,23 +146,27 @@ def seed_all(seed):
     torch.cuda.manual_seed(seed)
     np.random.seed(seed)
     random.seed(seed)
-    
+
 def exec():
 
-    with open('config.json', "r") as json_file:
+    config_args, _ = parser.parse_known_args()
+    with open(config_args.config, "r") as json_file:
         parameter_sets = json.load(json_file)
-        
+
+    import os
+    os.makedirs("Rslt", exist_ok=True)
+
     regret_loss_tracker=dict()
     cpt=0
     for parameters in parameter_sets:
         regret_loss_tracker[str(parameters)]=dict()
-        
+
         Args = argparse.Namespace(**parameters)
         args = parser.parse_args(namespace=Args)
         argument_dict = vars(args)
-        
+
         sentinel = _Sentinel()
-        
+
         explicit_keys = {key: sentinel if key not in parameters else parameters[key] for key in argument_dict}
         sentinel_ns = Namespace(**explicit_keys)
         parser.parse_args(namespace=sentinel_ns)
@@ -178,19 +179,19 @@ def exec():
         instance = args.instance
 
         ######## Solver for this instance
-        solver = ToyExample(instance)
+        solver = InstabilityProblem(instance)
         # ###################################### Hyperparams #########################################
 
         torch.use_deterministic_algorithms(True)
 
 
         # ################## Define the outputfile
-        outputfile = "Rslt/{}te{}{}.csv".format(modelname, args.loss,  args.instance)
+        outputfile = "Rslt/{}ip{}{}.csv".format(modelname, args.loss,  args.instance)
         sampleOutputFile = "Rslt/{}sampleOutput{}{}.csv".format(modelname,   args.loss,args.instance)
         ckpt_dir =  "ckpt_dir/{}{}{}/".format(modelname,  args.loss,args.instance)
         log_dir = "lightning_logs/{}{}{}/".format(modelname,  args.loss,args.instance)
 
-        learning_curve_datafile = "LearningCurve/{}_".format(modelname)+"_".join( ["{}_{}".format(k,v) for k,v  in explicit.items()] )+".csv"  
+        learning_curve_datafile = "LearningCurve/{}_".format(modelname)+"_".join( ["{}_{}".format(k,v) for k,v  in explicit.items()] )+".csv"
 
         shutil.rmtree(log_dir,ignore_errors=True)
 
@@ -202,13 +203,13 @@ def exec():
 
             g = torch.Generator()
             g.manual_seed(seed)
-        
+
             shutil.rmtree(ckpt_dir,ignore_errors=True)
             checkpoint_callback = ModelCheckpoint(
                             # monitor="val_regret",mode="min",
-                            dirpath=ckpt_dir, 
+                            dirpath=ckpt_dir,
                             filename="model-{epoch:02d}-{val_regret:.8f}",
-                            
+
                         )
             seed_all(seed)
 
@@ -222,7 +223,7 @@ def exec():
             # callback_list.append(cb_stop)
             model = modelcls(solver=solver,seed=seed, **argument_dict)
 
-            trainer = pl.Trainer(max_epochs=  argument_dict['max_epochs'], min_epochs=3, 
+            trainer = pl.Trainer(max_epochs=  argument_dict['max_epochs'], min_epochs=3,
             logger=tb_logger, callbacks=callback_list, check_val_every_n_epoch=1)
 
             t_start = time.process_time()
@@ -238,19 +239,19 @@ def exec():
             **argument_dict)
             else:
                 model = modelcls.load_from_checkpoint(best_model_path ,solver=solver,seed=seed,
-            **argument_dict)    
+            **argument_dict)
 
             # Calculate and save output values
             output_list = trainer.predict(model, data.test_dataloader())
-            
+
             df = pd.DataFrame({"output":output_list[0].tolist()})
             df.index.name='instance'
             for k,v in explicit.items():
                 df[k] = v
             df['seed'] = seed
-            with open(sampleOutputFile, 'a') as f:
+            with open(sampleOutputFile, 'a', newline='') as f:
                 df.to_csv(f, header=f.tell()==0)
-            
+
             # Calculate and save performance
             validresult = trainer.validate(model,datamodule=data)
             testresult = trainer.test(model, datamodule=data)
@@ -258,9 +259,9 @@ def exec():
             for k,v in explicit.items():
                 df[k] = v
             df['seed'] = seed
-            with open(outputfile, 'a') as f:
+            with open(outputfile, 'a', newline='') as f:
                     df.to_csv(f, header=f.tell()==0)
-                    
+
             clct = cb.collection
 
             val_regret = []
@@ -276,7 +277,7 @@ def exec():
             regret_loss_tracker[str(parameters)][seed]['train_regret']=train_regret
             regret_loss_tracker[str(parameters)][seed]['val_loss']=val_loss
             regret_loss_tracker[str(parameters)][seed]['train_loss']=train_loss
-            
+
         ###############################  Save  Learning Curve Data ########
         import os
         from tensorboard.backend.event_processing.event_accumulator import EventAccumulator

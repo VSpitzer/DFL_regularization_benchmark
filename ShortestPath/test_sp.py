@@ -115,6 +115,9 @@ def exec():
     with open(config_args.config, "r") as json_file:
         parameter_sets = json.load(json_file)
 
+    import os
+    os.makedirs("Rslt", exist_ok=True)
+
     for parameters in parameter_sets:
 
         Args = argparse.Namespace(**parameters)
@@ -217,7 +220,7 @@ def exec():
             df['seed'] =seed
             for k,v in explicit.items():
                 df[k] = v
-            with open(regretfile, 'a') as f:
+            with open(regretfile, 'a', newline='') as f:
                 df.to_csv(f, header=f.tell()==0)
 
 
@@ -228,7 +231,7 @@ def exec():
             df['seed'] =seed
             for k,v in explicit.items():
                 df[k] = v
-            with open(outputfile, 'a') as f:
+            with open(outputfile, 'a', newline='') as f:
                 df.to_csv(f, header=f.tell()==0)
         ###############################  Save  Learning Curve Data ########
         import os

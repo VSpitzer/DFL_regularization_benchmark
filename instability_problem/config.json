@@ -1,0 +1,209 @@
+[
+    {
+        "model": "SPO",
+        "instance": 1,
+        "lr": 0.1,
+        "max_epochs": 30,
+        "alpha": 2.0
+    },
+    {
+        "model": "SPO",
+        "instance": 2,
+        "lr": 0.1,
+        "max_epochs": 30,
+        "alpha": 2.0
+    },
+    {
+        "model": "SPO",
+        "instance": 3,
+        "lr": 0.1,
+        "max_epochs": 30,
+        "alpha": 10.0
+    },
+    {
+        "model": "SPO_rn",
+        "instance": 1,
+        "lr": 0.1,
+        "max_epochs": 30,
+        "alpha": 0.5
+    },
+    {
+        "model": "SPO_rn",
+        "instance": 2,
+        "lr": 0.1,
+        "max_epochs": 30,
+        "alpha": 0.5
+    },
+    {
+        "model": "SPO_rn",
+        "instance": 3,
+        "lr": 0.01,
+        "max_epochs": 30,
+        "alpha": 0.5
+    },
+    {
+        "model": "SPO_rp",
+        "instance": 1,
+        "lr": 0.1,
+        "max_epochs": 30,
+        "alpha": 0.5,
+        "kappa": 100
+    },
+    {
+        "model": "SPO_rp",
+        "instance": 2,
+        "lr": 0.1,
+        "max_epochs": 30,
+        "alpha": 2.0,
+        "kappa": 1
+    },
+    {
+        "model": "SPO_rp",
+        "instance": 3,
+        "lr": 0.1,
+        "max_epochs": 30,
+        "alpha": 0.5,
+        "kappa": 1
+    },
+    {
+        "model": "DBB",
+        "instance": 1,
+        "lr": 0.1,
+        "max_epochs": 30,
+        "lambda_val": 1.0
+    },
+    {
+        "model": "DBB",
+        "instance": 2,
+        "lr": 0.1,
+        "max_epochs": 30,
+        "lambda_val": 10.0
+    },
+    {
+        "model": "DBB",
+        "instance": 3,
+        "lr": 0.1,
+        "max_epochs": 30,
+        "lambda_val": 10.0
+    },
+    {
+        "model": "DBB_rn",
+        "instance": 1,
+        "lr": 0.1,
+        "max_epochs": 30,
+        "lambda_val": 10.0
+    },
+    {
+        "model": "DBB_rn",
+        "instance": 2,
+        "lr": 0.1,
+        "max_epochs": 30,
+        "lambda_val": 10.0
+    },
+    {
+        "model": "DBB_rn",
+        "instance": 3,
+        "lr": 0.01,
+        "max_epochs": 30,
+        "lambda_val": 1.0
+    },
+    {
+        "model": "DBB_rp",
+        "instance": 1,
+        "lr": 0.1,
+        "max_epochs": 30,
+        "lambda_val": 1.0,
+        "kappa": 1
+    },
+    {
+        "model": "DBB_rp",
+        "instance": 2,
+        "lr": 0.01,
+        "max_epochs": 30,
+        "lambda_val": 10.0,
+        "kappa": 1
+    },
+    {
+        "model": "DBB_rp",
+        "instance": 3,
+        "lr": 0.1,
+        "max_epochs": 30,
+        "lambda_val": 10.0,
+        "kappa": 10000
+    },
+    {
+        "model": "DPO",
+        "instance": 1,
+        "lr": 0.01,
+        "max_epochs": 30,
+        "sigma": 1.0,
+        "num_samples": 5
+    },
+    {
+        "model": "DPO",
+        "instance": 2,
+        "lr": 0.01,
+        "max_epochs": 30,
+        "sigma": 0.5,
+        "num_samples": 5
+    },
+    {
+        "model": "DPO",
+        "instance": 3,
+        "lr": 0.01,
+        "max_epochs": 30,
+        "sigma": 1.0,
+        "num_samples": 5
+    },
+    {
+        "model": "DPO_rn",
+        "instance": 1,
+        "lr": 0.01,
+        "max_epochs": 30,
+        "sigma": 1.0,
+        "num_samples": 5
+    },
+    {
+        "model": "DPO_rn",
+        "instance": 2,
+        "lr": 0.1,
+        "max_epochs": 30,
+        "sigma": 1.0,
+        "num_samples": 5
+    },
+    {
+        "model": "DPO_rn",
+        "instance": 3,
+        "lr": 0.01,
+        "max_epochs": 30,
+        "sigma": 0.5,
+        "num_samples": 5
+    },
+    {
+        "model": "DPO_rp",
+        "instance": 1,
+        "lr": 0.1,
+        "max_epochs": 30,
+        "sigma": 1.0,
+        "num_samples": 5,
+        "kappa": 1
+    },
+    {
+        "model": "DPO_rp",
+        "instance": 2,
+        "lr": 0.1,
+        "max_epochs": 30,
+        "sigma": 0.5,
+        "num_samples": 5,
+        "kappa": 1
+    },
+    {
+        "model": "DPO_rp",
+        "instance": 3,
+        "lr": 0.1,
+        "max_epochs": 30,
+        "sigma": 1.0,
+        "num_samples": 5,
+        "kappa": 1
+    }
+]

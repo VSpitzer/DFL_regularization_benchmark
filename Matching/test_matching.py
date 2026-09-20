@@ -153,6 +153,9 @@ def exec():
     with open(config_args.config, "r") as json_file:
         parameter_sets = json.load(json_file)
 
+    import os
+    os.makedirs("Rslt", exist_ok=True)
+
     cpt=0
     for parameters in parameter_sets:
         
@@ -251,7 +254,7 @@ def exec():
                 df[k] = v
             df['seed'] = seed
             df['time'] =training_time
-            with open(outputfile, 'a') as f:
+            with open(outputfile, 'a', newline='') as f:
                     df.to_csv(f, header=f.tell()==0)
                     
             clct = cb.collection
