@@ -42,6 +42,17 @@ Arguments:
     --nb_iterations (int): Number of iterations (default: 1)
     --k (int): Parameter k for specific methods (default: 10)
     --nb_samples (int): Number of samples parameter (default: 1)
+
+Outputs (written under Rslt/, one row per seed unless noted):
+    {model}ip{loss}{instance}.csv           -- aggregate test/val regret & mse
+    {model}sampleOutput{loss}{instance}.csv    -- per-test-sample end-of-training
+                                                   solution vertex (100 rows/seed)
+    {model}valSampleOutput{loss}{instance}.csv -- the same, for the validation set
+    regret_loss_tracker_{model}_{instance}.json -- per-epoch train/val loss &
+        regret, plus (per seed) train_cost_norm_avg/max/min -- the average,
+        max, and min L2 norm of the *raw* predicted cost vector y_hat across
+        that seed's whole training run (before any of a model's own internal
+        normalization), from log_cost_norm() in Trainer/PO_models.py
 """
 
 import argparse
@@ -147,6 +158,51 @@ def seed_all(seed):
     np.random.seed(seed)
     random.seed(seed)
 
+
+def append_csv_matching_header(df, path):
+    """Append df to path as CSV, keeping every appended row aligned with the
+    file's existing column layout no matter what.
+
+    Why this exists: which columns end up in `explicit` (and therefore in
+    df) depends on which CLI flags/JSON keys happened to be given for THIS
+    particular invocation -- e.g. a bare `python test_instability_problem.py`
+    (relying on --config's default) never puts 'config' on the command line,
+    so that run's rows would otherwise come out with fewer columns than a
+    run that was launched with an explicit `--config ...`. Appending
+    differently-shaped rows under one fixed header silently shifts every
+    field after the point of divergence out of alignment -- that is
+    precisely the corruption found in Rslt/*sampleOutput*.csv after a
+    config.json run following earlier config_grid.json runs.
+
+    The fix: if the file already exists, read its header and reindex df to
+    that exact column list before appending, regardless of df's own column
+    order or set. A column the header expects but df lacks is filled with
+    NaN; a column df has that the header doesn't is dropped (and reported)
+    rather than silently shifting everything else."""
+    import os as _os
+    import csv as _csv
+    file_exists = _os.path.exists(path) and _os.path.getsize(path) > 0
+    if file_exists:
+        with open(path, "r", newline="") as f:
+            header = next(_csv.reader(f))
+        # to_csv (below, default index=True) always writes the index first,
+        # so the header's first field is the index label ('instance'), not a
+        # real data column -- only header[1:] corresponds to df's own
+        # columns. (Every sampleOutputFile/valSampleOutputFile additionally
+        # has a genuine 'instance' *data* column too, so 'instance' appears
+        # twice in the header text; that's expected and handled correctly by
+        # only ever reindexing against header[1:].)
+        target_cols = header[1:]
+        extra = [c for c in df.columns if c not in target_cols]
+        if extra:
+            print("WARNING: {} -- dropping column(s) {} not present in the file's "
+                  "existing header so the append stays aligned. Delete the file "
+                  "and rerun if these columns need to be captured.".format(path, extra))
+        df = df.reindex(columns=target_cols)
+    with open(path, "a", newline="") as f:
+        df.to_csv(f, header=not file_exists)
+
+
 def exec():
 
     config_args, _ = parser.parse_known_args()
@@ -188,6 +244,7 @@ def exec():
         # ################## Define the outputfile
         outputfile = "Rslt/{}ip{}{}.csv".format(modelname, args.loss,  args.instance)
         sampleOutputFile = "Rslt/{}sampleOutput{}{}.csv".format(modelname,   args.loss,args.instance)
+        valSampleOutputFile = "Rslt/{}valSampleOutput{}{}.csv".format(modelname,   args.loss,args.instance)
         ckpt_dir =  "ckpt_dir/{}{}{}/".format(modelname,  args.loss,args.instance)
         log_dir = "lightning_logs/{}{}{}/".format(modelname,  args.loss,args.instance)
 
@@ -241,16 +298,39 @@ def exec():
                 model = modelcls.load_from_checkpoint(best_model_path ,solver=solver,seed=seed,
             **argument_dict)
 
-            # Calculate and save output values
+            # Calculate and save output values (test set)
             output_list = trainer.predict(model, data.test_dataloader())
 
             df = pd.DataFrame({"output":output_list[0].tolist()})
             df.index.name='instance'
             for k,v in explicit.items():
                 df[k] = v
+            # Always stamp these explicitly rather than relying solely on
+            # `explicit` -- config.json (as opposed to config_grid.json) was
+            # never listed on this run's command line, so 'config' would
+            # otherwise be silently missing from these columns. See
+            # append_csv_matching_header()'s docstring for why that matters.
+            df['config'] = config_args.config
+            df['scheduler'] = bool(argument_dict.get('scheduler', False))
             df['seed'] = seed
-            with open(sampleOutputFile, 'a', newline='') as f:
-                df.to_csv(f, header=f.tell()==0)
+            append_csv_matching_header(df, sampleOutputFile)
+
+            # Calculate and save output values (validation set) -- mirrors the
+            # test-set block above exactly, just on the validation dataloader.
+            # This is what lets best_results.py-style analyses (and the
+            # article's vertex-proportion figure) compare the end-of-training
+            # per-sample solution choice on val vs test, not just aggregate
+            # val_regret/val_mse.
+            val_output_list = trainer.predict(model, data.val_dataloader())
+
+            df = pd.DataFrame({"output":val_output_list[0].tolist()})
+            df.index.name='instance'
+            for k,v in explicit.items():
+                df[k] = v
+            df['config'] = config_args.config
+            df['scheduler'] = bool(argument_dict.get('scheduler', False))
+            df['seed'] = seed
+            append_csv_matching_header(df, valSampleOutputFile)
 
             # Calculate and save performance
             validresult = trainer.validate(model,datamodule=data)
@@ -258,9 +338,10 @@ def exec():
             df = pd.DataFrame({**testresult[0], **validresult[0]},index=[0])
             for k,v in explicit.items():
                 df[k] = v
+            df['config'] = config_args.config
+            df['scheduler'] = bool(argument_dict.get('scheduler', False))
             df['seed'] = seed
-            with open(outputfile, 'a', newline='') as f:
-                    df.to_csv(f, header=f.tell()==0)
+            append_csv_matching_header(df, outputfile)
 
             clct = cb.collection
 
@@ -268,15 +349,32 @@ def exec():
             train_regret = []
             val_loss = []
             train_loss = []
+            # Per-epoch train_cost_norm_mean/max/min come from log_cost_norm()
+            # in PO_models.py (logged on every training batch, PL reduces
+            # each to one mean/max/min value per epoch already) -- collected
+            # here per-epoch, then reduced once more below across the whole
+            # run's epochs (mean-of-means, max-of-maxes, min-of-mins; exact
+            # since every epoch has the same number of training batches).
+            cost_norm_mean_per_epoch = []
+            cost_norm_max_per_epoch = []
+            cost_norm_min_per_epoch = []
             for i, metrics in enumerate(cb.collection, 1):
                 train_regret.append(float(metrics['train_regret']))
                 val_regret.append(float(metrics['val_regret']))
                 train_loss.append(float(metrics['train_loss']))
                 val_loss.append(float(metrics['val_loss']))
+                if 'train_cost_norm_mean' in metrics:
+                    cost_norm_mean_per_epoch.append(float(metrics['train_cost_norm_mean']))
+                    cost_norm_max_per_epoch.append(float(metrics['train_cost_norm_max']))
+                    cost_norm_min_per_epoch.append(float(metrics['train_cost_norm_min']))
             regret_loss_tracker[str(parameters)][seed]['val_regret']=val_regret
             regret_loss_tracker[str(parameters)][seed]['train_regret']=train_regret
             regret_loss_tracker[str(parameters)][seed]['val_loss']=val_loss
             regret_loss_tracker[str(parameters)][seed]['train_loss']=train_loss
+            if cost_norm_mean_per_epoch:
+                regret_loss_tracker[str(parameters)][seed]['train_cost_norm_avg'] = sum(cost_norm_mean_per_epoch) / len(cost_norm_mean_per_epoch)
+                regret_loss_tracker[str(parameters)][seed]['train_cost_norm_max'] = max(cost_norm_max_per_epoch)
+                regret_loss_tracker[str(parameters)][seed]['train_cost_norm_min'] = min(cost_norm_min_per_epoch)
 
         ###############################  Save  Learning Curve Data ########
         import os

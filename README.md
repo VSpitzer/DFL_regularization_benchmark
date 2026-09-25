@@ -55,3 +55,66 @@ python test_matching.py --scheduler True --config config_grid.json
 python test_sp.py --scheduler True --config config_grid.json
 ```
 
+### The instability problem
+
+`instability_problem/test_instability_problem.py` takes the same `--config`
+flag. Its data ships with the repository, so nothing has to be downloaded. Each
+run writes one CSV per model/loss/instance into `instability_problem/Rslt/`, and
+`best_results.py` reduces those to one line per (model, instance): the
+hyperparameter combination with the lowest mean validation regret over the ten
+seeds, and that combination's mean test regret.
+
+```bash
+cd instability_problem
+
+# Best/tuned hyperparameters (default)
+python test_instability_problem.py --scheduler True --config config.json
+
+# Full hyperparameter grid from the paper
+python test_instability_problem.py --scheduler True --config config_grid.json
+
+# Summarise a grid run
+python best_results.py
+```
+
+### Solution stability during training
+
+`instability_problem/stability_study/` measures, epoch by epoch, the ratio the
+perturbation-based methods are governed by,
+
+    rho_eta = ||delta|| / eta(theta~)
+
+the perturbation norm in units of the stability radius of the point being
+perturbed, and produces the two figures comparing each standard run with its
+regularized counterpart:
+
+```
+stability_study/figs/rho_eta_drift_panel.png    how far rho_eta travels during training
+stability_study/figs/rho_eta_level_panel.png    where rho_eta sits
+```
+
+Drawing them from the stored results takes one command, from anywhere in the
+repository:
+
+```bash
+python instability_problem/stability_study/paired_rho_figures.py
+```
+
+Regenerating the results behind them first (315 configurations x 10 seeds, about
+five CPU-hours; the run is resumable, so rerunning the same command picks up
+where it stopped, and `--shard i --nshards n` splits it across processes):
+
+```bash
+cd instability_problem/stability_study
+python run_experiments.py --spec specs/paper_grid.json --out results/paper_grid.jsonl
+gzip -f results/paper_grid.jsonl
+python paired_rho_figures.py
+```
+
+Training is deterministic and the probe draws its noise from its own generator,
+so a rerun reproduces every record of `results/paper_grid.jsonl.gz` exactly.
+`Trainer/PO_models.py` is not modified: `instrument.py` reads it, applies its
+additive edits to the source text and executes the result in memory. See
+`instability_problem/stability_study/README.md` for the definition of `rho_eta`,
+of the two summaries plotted, and of the scope of the comparison.
+

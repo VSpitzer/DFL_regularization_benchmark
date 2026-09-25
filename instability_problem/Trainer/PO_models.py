@@ -15,6 +15,24 @@ import torch.nn.functional as F
 import pytorch_lightning as pl
 
 
+def log_cost_norm(module, y_hat):
+    """Log the per-sample L2 norm of this training batch's *raw* predicted
+    cost vector y_hat -- i.e. before any of a model's own internal
+    normalization (the _rn/_rp variants divide y_hat by its norm, or by
+    1 + norm/kappa, before ever using it), so this reflects what the network
+    naturally produces. Logged per training step with on_epoch=True and a
+    mean/max/min reduction, so PyTorch Lightning gives one
+    mean/max/min-over-the-epoch's-batches value per epoch; test_instability_
+    problem.py then further reduces those across the whole run (mean of the
+    per-epoch means, max of the per-epoch maxes, min of the per-epoch mins)
+    and best_results.py reports that, averaged across seeds, as the
+    "cost vector norm throughout training" columns."""
+    norms = y_hat.norm(dim=-1) if y_hat.dim() > 1 else y_hat.abs().unsqueeze(0)
+    module.log("train_cost_norm_mean", norms.mean(), on_step=False, on_epoch=True, reduce_fx="mean")
+    module.log("train_cost_norm_max", norms.max(), on_step=False, on_epoch=True, reduce_fx="max")
+    module.log("train_cost_norm_min", norms.min(), on_step=False, on_epoch=True, reduce_fx="min")
+
+
 class baseline_mse(pl.LightningModule):
     def __init__(self,solver,lr=1e-1,seed=0,scheduler=False, **kwd):
         super().__init__()
@@ -34,6 +52,7 @@ class baseline_mse(pl.LightningModule):
     def training_step(self, batch, batch_idx):
         x,y,sol,m = batch
         y_hat =  self(x).squeeze()
+        log_cost_norm(self, y_hat)
         criterion = nn.MSELoss(reduction='mean')
         loss = criterion(y_hat,y)
         self.log("train_loss",loss, prog_bar=True, on_step=True, on_epoch=True, )
@@ -117,6 +136,7 @@ class SPO(baseline_mse):
     def training_step(self, batch, batch_idx):
         x,y,sol,m = batch
         y_hat =  self(x).squeeze()
+        log_cost_norm(self, y_hat)
         train_regret= regret_fn(self.solver,y_hat,y,sol,m)
         loss =  self.layer(y_hat, y,sol,m )
         self.log("train_loss",loss, prog_bar=True, on_step=False, on_epoch=True, )
@@ -148,6 +168,7 @@ class SPO_rn(baseline_mse):
     def training_step(self, batch, batch_idx):
         x,y,sol,m = batch
         y_hat =  self(x).squeeze()
+        log_cost_norm(self, y_hat)
         train_regret= regret_fn(self.solver,y_hat,y,sol,m)
 
         normalized_y_hat = torch.zeros(y_hat.shape)
@@ -157,13 +178,13 @@ class SPO_rn(baseline_mse):
         normalized_y = torch.zeros(y.shape)
         for i in range(len(y_hat)):
             normalized_y[i] = y[i]*1./torch.linalg.norm(y[i])
-        
+
 
         loss = self.layer(normalized_y_hat, normalized_y, sol, m)
 
         self.log("train_loss",loss, prog_bar=True, on_step=False, on_epoch=True, )
         self.log("train_regret",train_regret, prog_bar=True, on_step=False, on_epoch=True, )
-        return loss  
+        return loss
 
     def validation_step(self, batch, batch_idx):
         x,y,sol,m = batch
@@ -198,6 +219,7 @@ class SPO_rp(baseline_mse):
     def training_step(self, batch, batch_idx):
         x,y,sol,m = batch
         y_hat =  self(x).squeeze()
+        log_cost_norm(self, y_hat)
         train_regret= regret_fn(self.solver,y_hat,y,sol,m)
 
         normalized_y_hat = torch.zeros(y_hat.shape)
@@ -208,7 +230,7 @@ class SPO_rp(baseline_mse):
 
         self.log("train_loss",loss, prog_bar=True, on_step=False, on_epoch=True, )
         self.log("train_regret",train_regret, prog_bar=True, on_step=False, on_epoch=True, )
-        return loss    
+        return loss
 
     def validation_step(self, batch, batch_idx):
         x,y,sol,m = batch
@@ -239,6 +261,7 @@ class DBB(baseline_mse):
     def training_step(self, batch, batch_idx):
         x,y,sol,m = batch
         y_hat =  self(x).squeeze()
+        log_cost_norm(self, y_hat)
         train_regret= regret_fn(self.solver,y_hat,y,sol,m)
         sol_hat  =  self.layer(y_hat, y,sol,m )
         loss = ((sol - sol_hat)*y).sum(-1).mean()
@@ -273,8 +296,9 @@ class DBB_rn(baseline_mse):
     def training_step(self, batch, batch_idx):
         x,y,sol,m = batch
         y_hat =  self(x).squeeze()
+        log_cost_norm(self, y_hat)
         train_regret= regret_fn(self.solver,y_hat,y,sol,m)
-        
+
         normalized_y_hat = torch.zeros(y_hat.shape)
         for i in range(len(y_hat)):
             normalized_y_hat[i] = y_hat[i]*1./torch.linalg.norm(y_hat[i])
@@ -282,23 +306,23 @@ class DBB_rn(baseline_mse):
         normalized_y = torch.zeros(y.shape)
         for i in range(len(y_hat)):
             normalized_y[i] = y[i]*1./torch.linalg.norm(y[i])
-                
+
         sol_hat  =  self.layer(normalized_y_hat, normalized_y,sol,m )
 
         loss = ((sol - sol_hat)*y).sum(-1).mean()
         self.log("train_loss",loss, prog_bar=True, on_step=False, on_epoch=True, )
         self.log("train_regret",train_regret, prog_bar=True, on_step=False, on_epoch=True, )
         return loss
-        
+
     def validation_step(self, batch, batch_idx):
         x,y,sol,m = batch
-    
+
         y_hat =  self(x).squeeze()
         val_regret= regret_fn(self.solver,y_hat,y,sol,m)
         abs_val_loss= abs_regret_fn(self.solver,y_hat,y,sol,m)
         criterion1 = nn.MSELoss(reduction='mean')
         mseloss = criterion1(y_hat, y)
-        
+
         normalized_y_hat = torch.zeros(y_hat.shape)
         for i in range(len(y_hat)):
             normalized_y_hat[i] = y_hat[i]*1./torch.linalg.norm(y_hat[i])
@@ -306,7 +330,7 @@ class DBB_rn(baseline_mse):
         normalized_y = torch.zeros(y.shape)
         for i in range(len(y_hat)):
             normalized_y[i] = y[i]*1./torch.linalg.norm(y[i])
-                
+
         sol_hat  =  self.layer(normalized_y_hat, normalized_y,sol,m )
         val_loss = ((sol - sol_hat)*y).sum(-1).mean()
        
@@ -325,12 +349,13 @@ class DBB_rp(baseline_mse):
     def training_step(self, batch, batch_idx):
         x,y,sol,m = batch
         y_hat =  self(x).squeeze()
+        log_cost_norm(self, y_hat)
         train_regret= regret_fn(self.solver,y_hat,y,sol,m)
-        
+
         normalized_y_hat = torch.zeros(y_hat.shape)
         for i in range(len(y_hat)):
-            normalized_y_hat[i] = y_hat[i]*1./(1+torch.linalg.norm(y_hat[i])*1./self.kappa)  
-                
+            normalized_y_hat[i] = y_hat[i]*1./(1+torch.linalg.norm(y_hat[i])*1./self.kappa)
+
         sol_hat  =  self.layer(normalized_y_hat, y,sol,m )
 
         loss = ((sol - sol_hat)*y).sum(-1).mean()
@@ -372,8 +397,9 @@ class DPO(baseline_mse):
     def training_step(self, batch, batch_idx):
         x,y,sol,m = batch
         y_hat =  self(x).squeeze()
+        log_cost_norm(self, y_hat)
         train_regret= regret_fn(self.solver,y_hat,y,sol,m)
-        
+
         loss = 0
         for i in range(len(y_hat)):
             def solver(y_):
@@ -433,8 +459,9 @@ class DPO_rn(baseline_mse):
     def training_step(self, batch, batch_idx):
         x,y,sol,m = batch
         y_hat =  self(x).squeeze()
+        log_cost_norm(self, y_hat)
         train_regret= regret_fn(self.solver,y_hat,y,sol,m)
-        
+
         normalized_y_hat = torch.zeros(y_hat.shape)
         for i in range(len(y_hat)):
             normalized_y_hat[i] = y_hat[i]*1./torch.linalg.norm(y_hat[i])
@@ -442,7 +469,7 @@ class DPO_rn(baseline_mse):
         normalized_y = torch.zeros(y.shape)
         for i in range(len(y_hat)):
             normalized_y[i] = y[i]*1./torch.linalg.norm(y[i])
-        
+
         loss = 0
         for i in range(len(normalized_y_hat)):
             def solver(y_):
@@ -511,12 +538,13 @@ class DPO_rp(baseline_mse):
     def training_step(self, batch, batch_idx):
         x,y,sol,m = batch
         y_hat =  self(x).squeeze()
+        log_cost_norm(self, y_hat)
         train_regret= regret_fn(self.solver,y_hat,y,sol,m)
-        
+
         normalized_y_hat = torch.zeros(y_hat.shape)
         for i in range(len(y_hat)):
-            normalized_y_hat[i] = y_hat[i]*1./(1+torch.linalg.norm(y_hat[i])*1./self.kappa) 
-        
+            normalized_y_hat[i] = y_hat[i]*1./(1+torch.linalg.norm(y_hat[i])*1./self.kappa)
+
         loss = 0
         for i in range(len(normalized_y_hat)):
             def solver(y_):
