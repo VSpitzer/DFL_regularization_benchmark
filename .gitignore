@@ -127,3 +127,7 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+
+# generated tables and figures, uncompressed run outputs
+*/outputs/
+*/results/*.jsonl

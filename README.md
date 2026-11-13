@@ -1,120 +1,122 @@
-# Benchmarking Predict-then-Optimize Problems
+# Controlling Scale Mismatch in Decision-Focused Learning via Cost Regularization
 
-This repository is intended to support the reproducibility of the numerical experiments presented in the article "Managing Solution Stability in Decision-Focused Learning with Cost Regularization". It is primarily based on an adaptation of the code originally developed by Jayanta Mandi: https://github.com/PredOpt/predopt-benchmarks
+Code and results to reproduce the numerical experiments of the article (Section 6 and Appendices C–E):
+
+| Article | What | Script |
+|---|---|---|
+| Table 1 | Three-vertex problem, regret of SPO / DPO / DBB with each regularization | `three_vertex/make_table1.py` |
+| Figure 1 (a, b) | Three-vertex problem, stability ratio $\rho_\eta$ with and without shrinkage | `three_vertex/make_figure1.py` |
+| Table 2 | Shortest-path and knapsack benchmarks, regret by degree $q$ | `benchmarks/make_table2.py` |
+| Tables 4, 5 | Benchmarks, decision-change rate $\Delta$ and norm of the estimates | `benchmarks/make_tables4_5.py` |
+
+The three-vertex code is adapted from the benchmark of Jayanta Mandi
+(https://github.com/PredOpt/predopt-benchmarks); the benchmark data follow the PyEPO generator
+(Tang & Khalil, 2024).
 
 ## Installation
 
-### Setup
-Prerequisite : conda package manager
+Python 3.9:
 
-1. Install Conda by following the [official installation guide](https://conda.io/projects/conda/en/latest/user-guide/install/index.html)
-
-2. Create and activate the environment:
 ```bash
-# Create environment
-conda create -n benchmarking_env python=3.9 -y
-
-# Activate on Linux/macOS
-conda activate benchmarking_env
-
-# Activate on Windows
+conda create -n dfl_reg python=3.9 -y
+conda activate dfl_reg
 pip install -r requirements.txt
 ```
 
-## Running Experiments
+## Layout
 
-Navigate to the corresponding experiment directory to run specific benchmarks.
+```
+three_vertex/                   Section 6.1 (three-vertex problem)
+  run_three_vertex.py           trains a grid of configurations (ten seeds each), records rho_eta
+  make_table1.py                Table 1
+  make_figure1.py               Figure 1a and 1b
+  rho_eta.py                    exact stability radius and stability ratio rho_eta of the problem
+  Trainer/                      models (PO_models_rebuttal.py: every method x regularization),
+                                regularizations (regularizers.py), problem and data loading
+  DPO/                          perturbed optimizers (DPO)
+  data/                         the 300 instances (rotation angles and true costs)
+  specs/three_vertex.json       the grid of the article (2700 configurations)
+  results/three_vertex.jsonl.gz the 27000 runs behind Table 1 and Figure 1
+benchmarks/                     Section 6.2 (shortest path and knapsack)
+  pyepo_benchmark.py            data generators, exact solvers, training of SPO / DPO / DBB
+  regularizers.py               regularizations
+  run_benchmarks.py             trains the grid of the article (ten seeds each)
+  analysis.py                   selection protocol
+  make_table2.py                Table 2 (and the two-stage baseline, the spread of the cost norms)
+  make_tables4_5.py             Tables 4 and 5
+  results/{sp,knapsack}.jsonl.gz the 54000 runs behind Tables 2, 4 and 5
+```
 
-### Data
+## Reproducing the tables and figures from the stored runs
 
-- **Matching**: download the preprocessed CORA dataset before running any experiment. From the `Matching/` directory, run:
-  ```bash
-  ./get_data.sh
-  ```
-  (On Windows, there is no bash to run this script directly — run its commands one by one instead: `pip install gdown`, then `gdown 1MNy9HCVkJykRbXf6XXI9D7lggF0UF8MP`, `tar -xvzf data.tar.gz`, delete `data.tar.gz`, and finally `cd data` followed by `python make_cora_dataset.py`.) This creates a `data/` folder with the files the experiments expect. Alternatively, download the dataset directly from https://doi.org/10.48804/KT2P3Z and extract the `tar.gz` archive into `Matching/data/`.
-
-- **ShortestPath**: download the shortest path dataset from https://doi.org/10.48804/KT2P3Z, then, from the `ShortestPath/` directory, extract it:
-  ```bash
-  tar -xvzf ShortestPathData.tar.gz
-  ```
-
-### Run configurations
-
-`Matching/test_matching.py` and `ShortestPath/test_sp.py` both accept a `--config` flag selecting which JSON file of hyperparameter settings to run:
-
-- `config.json` (default) — the best/tuned hyperparameters for each model and problem instance.
-- `config_grid.json` — the full hyperparameter grid searched in the paper.
+Each command takes a few seconds and writes LaTeX tables or PNG figures to the `outputs/` folder next to
+the script:
 
 ```bash
-# Best/tuned hyperparameters (default)
-python test_matching.py --scheduler True --config config.json
-python test_sp.py --scheduler True --config config.json
+cd three_vertex
+python make_table1.py          # outputs/table1.tex  (--show_options: selected configurations)
+python make_figure1.py         # outputs/rho_eta_drift_panel_rs.png, outputs/rho_eta_level_panel_rs.png
 
-# Full hyperparameter grid from the paper
-python test_matching.py --scheduler True --config config_grid.json
-python test_sp.py --scheduler True --config config_grid.json
+cd ../benchmarks
+python make_table2.py          # outputs/table2.tex
+python make_tables4_5.py       # outputs/table4.tex, outputs/table5.tex
 ```
 
-### The instability problem
+## Rerunning the experiments
 
-`instability_problem/test_instability_problem.py` takes the same `--config`
-flag. Its data ships with the repository, so nothing has to be downloaded. Each
-run writes one CSV per model/loss/instance into `instability_problem/Rslt/`, and
-`best_results.py` reduces those to one line per (model, instance): the
-hyperparameter combination with the lowest mean validation regret over the ten
-seeds, and that combination's mean test regret.
+Both runners are resumable (runs already present in the output file are skipped), so an interrupted run is
+continued by repeating the same command.
+
+**Three-vertex problem** (27000 runs, about 25 CPU-hours):
 
 ```bash
-cd instability_problem
-
-# Best/tuned hyperparameters (default)
-python test_instability_problem.py --scheduler True --config config.json
-
-# Full hyperparameter grid from the paper
-python test_instability_problem.py --scheduler True --config config_grid.json
-
-# Summarise a grid run
-python best_results.py
+cd three_vertex
+python run_three_vertex.py --make_spec            # specs/three_vertex.json (already provided)
+python run_three_vertex.py --spec specs/three_vertex.json --out results/three_vertex.jsonl \
+    --shard 0 --nshards 4                         # one process per shard, 0..3
+cat results/three_vertex.jsonl | gzip > results/three_vertex.jsonl.gz
 ```
 
-### Solution stability during training
-
-`instability_problem/stability_study/` measures, epoch by epoch, the ratio the
-perturbation-based methods are governed by,
-
-    rho_eta = ||delta|| / eta(theta~)
-
-the perturbation norm in units of the stability radius of the point being
-perturbed, and produces the two figures comparing each standard run with its
-regularized counterpart:
-
-```
-stability_study/figs/rho_eta_drift_panel.png    how far rho_eta travels during training
-stability_study/figs/rho_eta_level_panel.png    where rho_eta sits
-```
-
-Drawing them from the stored results takes one command, from anywhere in the
-repository:
+**Benchmarks** (54000 runs, about 50 CPU-hours; `--deg` and `--method` split the work):
 
 ```bash
-python instability_problem/stability_study/paired_rho_figures.py
+cd benchmarks
+python run_benchmarks.py --problem sp --out results/sp.jsonl
+python run_benchmarks.py --problem knapsack --out results/knapsack.jsonl
+gzip -f results/sp.jsonl results/knapsack.jsonl
 ```
 
-Regenerating the results behind them first (315 configurations x 10 seeds, about
-five CPU-hours; the run is resumable, so rerunning the same command picks up
-where it stopped, and `--shard i --nshards n` splits it across processes):
+Training is seeded and deterministic: on CPU, a rerun reproduces the stored validation and test regrets,
+up to the last digits of floating-point reductions.
 
-```bash
-cd instability_problem/stability_study
-python run_experiments.py --spec specs/paper_grid.json --out results/paper_grid.jsonl
-gzip -f results/paper_grid.jsonl
-python paired_rho_figures.py
-```
+## Experimental protocol
 
-Training is deterministic and the probe draws its noise from its own generator,
-so a rerun reproduces every record of `results/paper_grid.jsonl.gz` exactly.
-`Trainer/PO_models.py` is not modified: `instrument.py` reads it, applies its
-additive edits to the source text and executes the result in memory. See
-`instability_problem/stability_study/README.md` for the definition of `rho_eta`,
-of the two summaries plotted, and of the scope of the comparison.
+* **Methods**: SPO (perturbation $\alpha\theta - \bar\theta$), DPO (Gaussian noise $\sigma$, 5 samples),
+  DBB (interpolation $\theta + \beta\bar\theta$).
+* **Regularizations** of the estimate $\theta$ fed to the perturbation: shrinkage
+  $r^s(\theta) = \theta/(1 + \|\theta\|/\kappa)$, clipping $r^c(\theta) = \min(1, \kappa/\|\theta\|)\,\theta$,
+  normalization $r^n(\theta) = \theta/\|\theta\|$, and the $L_2$ penalty
+  $\lambda\|\theta\|^2/\overline{\|\bar\theta\|}$ added to the loss, $\kappa$ being an absolute value.
+* **Target normalization**, an optional preprocessing selected like any other hyperparameter: the model is
+  trained on $\bar\theta\,\overline{\|\bar\theta\|}/\|\bar\theta\|$ ($\overline{\|\bar\theta\|}$: mean norm
+  over the training set), and the regret is computed with the original costs.
+* **Grids** (Appendix C):
 
+  | | Three-vertex | Benchmarks |
+  |---|---|---|
+  | learning rate | $10^{-4}, 10^{-3}, 10^{-2}, 10^{-1}, 1$ | $10^{-2}, 10^{-1}, 1$ |
+  | $\alpha$ (SPO) / $\sigma$ (DPO) / $\beta$ (DBB) | $\{0.5, 2, 10\}$ / $\{0.1, 0.5, 1\}$ / $\{0.1, 1, 10\}$ | same |
+  | $\kappa$ (shrinkage, clipping) | $1, 100, 10^4$ | same |
+  | $\lambda$ ($L_2$ penalty) | $0.1, 1$ | same |
+  | target normalization | without, with | same |
+  | training | MLP (10 hidden units), Adam, 30 epochs, scheduler | linear model, Adam, 30 epochs, batches of 32 |
+
+* **Selection and testing**: every configuration is trained with ten seeds; for each method,
+  regularization and problem, the configuration with the lowest mean validation regret is selected (target
+  normalization included), and the mean test regret of the same ten runs is reported. Significance: one-sided
+  paired Wilcoxon signed-rank test over the seeds against the standard method selected in the same way.
+* **Three-vertex categories**: instances 1, 2, 3 of `Trainer/instability_problem.py` place vertex $C$ at
+  $b = 1, 10, 100$ (categories c1, c2, c3).
+* **Benchmarks**: shortest path on a $5\times5$ grid and knapsack with 32 items, PyEPO generator with degree
+  $q \in \{1, 2, 4, 6, 8\}$, 1000 training, 250 validation and 1000 test samples, exact dynamic-programming
+  solvers.
